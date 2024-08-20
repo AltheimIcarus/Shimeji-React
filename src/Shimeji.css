@@ -1,0 +1,8 @@
+
+/* main wrapper container for shimeji object */
+.shimeji-container {
+    background-image: url(./images/shime1.png);
+    background-size: 100%;
+    background-repeat: no-repeat;
+    background-position: center;
+}
