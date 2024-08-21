@@ -1,5 +1,4 @@
-<<<<<<< HEAD
-import {React, useCallback, useRef, useState} from 'react';
+import {React, useEffect, useRef, useState} from 'react';
 import ContextMenu from './components/ContextMenu';
 import './Shimeji.css';
 
@@ -24,57 +23,109 @@ function Frame() {
     
 }
 
-const Shimeji = () => {
+const Shimeji = ({
+    id,             // id of current shimeji instance
+    remove,         // parent's function for removing a shimeji with id
+    duplicate,      // parent's function for duplication a shimeji with id
+}) => {
     const [action, setAction] = useState(0);
     const [position, setPosition] = useState({
-        x: 10,
+        x: 200,
         y: 10,
     });
-    const [menu, setMenu] = useState(null);
-    const ref = useRef(null);
+    const [menu, setMenu] = useState({
+        position: {
+            x: 0,
+            y: 0,
+        },
+        toggled: false,
+    });
+    const contextMenuRef = useRef(null);
 
     // generate a new time out for 1st shimeji action
 
     // handle right click to open menu
-    const handleRightClick = useCallback(
-        (e) => {
-            e.preventDefault();
-            const pane = ref.current.getBoundingClientRect();
-            setMenu({
-                ref: ref,
-                top: e.clientY < pane.height - 200 && e.clientY,
-                left: e.clientX < pane.width - 200 && e.clientX,
-                right: e.clientX >= pane.width - 200 && pane.width - e.clientX,
-                bottom: e.clientY >= pane.height - 200 && pane.height - e.clientY,
-                remove: removeShimeji,
-                duplicate: duplicateShimeji,
-            });
-        },
-        [setMenu],
-    );
-    
+    const handleRightClick = (e) => {
+        e.preventDefault();
+        // get reference to context menu DOM
+        const contextMenuAttr = contextMenuRef.current.getBoundingClientRect();
+        
+        // check if cursor is at left of menu when clicked
+        const isLeft = e.clientX < window?.innerWidth / 2;
+
+        let x = e.clientX;
+        let y = e.clientY;
+
+        if (!isLeft) {
+            x = e.clientX - contextMenuAttr.width;
+        }
+
+        setMenu({
+            position: {
+                x,
+                y,
+            },
+            toggled: true,
+        });
+    };
+
     // close right click menu
-    const handlePaneClick = useCallback(() => setMenu(null), [setMenu]);
+    const closeContextMenu = () => {
+        setMenu({
+            position: {
+                x: 0,
+                y: 0,
+            },
+            toggled: false,
+        });
+    };
 
-    // remove shimeji
-    const removeShimeji = () => {}
+    // handle click anywhere on root document to close right click menu
+    useEffect(() => {
+        const handleCloseMenu = (e) => {
+            // check if right click menu component exist
+            if (contextMenuRef.current) {
+                // check if right click menu component is the one that trigger this function call
+                if (!contextMenuRef.current.contains(e.target)) {
+                    // close right click menu
+                    closeContextMenu();
+                }
+            }
+        };
 
-    // duplicate shimeji
-    const duplicateShimeji = () => {}
+        document.addEventListener('click', handleCloseMenu);
+
+        return () => {
+            document.removeEventListener('click', handleCloseMenu);
+        };
+    });
+    
+    // remove shimeji with parent's function
+    const removeShimeji = () => {
+        remove(id);
+    };
+
+    // duplicate shimeji with parent's function
+    const duplicateShimeji = () => {
+        duplicate(id);
+    };
 
     // render shimeji on screen on topmost of <body>
     return (
         <div
-            ref={ref}
             className='shimeji-container'
-            style={{ width: WIDTH, height: HEIGHT, position: 'fixed', left: position.x, bottom: position.y }}
-            onContextMenu={handleRightClick}
-            onPaneClick={handlePaneClick}
+            style={{ width: WIDTH, height: HEIGHT, left: position.x, bottom: position.y }}
+            onContextMenu={(e) => handleRightClick(e)}    // invoke right click context menu
         >
-
-            {menu && <ContextMenu
-                onClick={handlePaneClick} {...menu}
-            />}
+            
+            <ContextMenu               // right click context menu component in ContextMenu.js
+                contextMenuRef={contextMenuRef}
+                isToggled={menu.toggled}        // check if context menu is shown
+                positionY={menu.position.y}     // set top position of context menu
+                positionX={menu.position.x}     // set left position of context menu
+                remove={removeShimeji}          // pass current removeShimeji function to be invoked by pressing remove button in context menu
+                duplicate={duplicateShimeji}    // pass current duplicateShimeji function to be invoked by pressing duplicate button in context menu
+            />
         </div>
     );
 
@@ -106,113 +157,4 @@ const Shimeji = () => {
     const drag = () => {}
 }
 
-=======
-import {React, useCallback, useRef, useState} from 'react';
-import ContextMenu from './components/ContextMenu';
-import './Shimeji.css';
-
-// fixed shimeji size in pixel
-const WIDTH = 30;
-const HEIGHT = 50;
-
-// min and max animation repeat duration
-const MIN_DURATION_MS = 10000;
-const MAX_DURATION_MS = 30000;
-
-// available action animation of shimeji
-const actions = {
-    0: 'standing',
-    1: 'walking',
-    2: 'sleeping',
-    3: 'climbing',
-    4: 'dragging',
-};
-
-function Frame() {
-    
-}
-
-const Shimeji = () => {
-    const [action, setAction] = useState(0);
-    const [position, setPosition] = useState({
-        x: 10,
-        y: 10,
-    });
-    const [menu, setMenu] = useState(null);
-    const ref = useRef(null);
-
-    // generate a new time out for 1st shimeji action
-
-    // handle right click to open menu
-    const handleRightClick = useCallback(
-        (e) => {
-            e.preventDefault();
-            const pane = ref.current.getBoundingClientRect();
-            setMenu({
-                ref: ref,
-                top: e.clientY < pane.height - 200 && e.clientY,
-                left: e.clientX < pane.width - 200 && e.clientX,
-                right: e.clientX >= pane.width - 200 && pane.width - e.clientX,
-                bottom: e.clientY >= pane.height - 200 && pane.height - e.clientY,
-                remove: removeShimeji,
-                duplicate: duplicateShimeji,
-            });
-        },
-        [setMenu],
-    );
-    
-    // close right click menu
-    const handlePaneClick = useCallback(() => setMenu(null), [setMenu]);
-
-    // remove shimeji
-    const removeShimeji = () => {}
-
-    // duplicate shimeji
-    const duplicateShimeji = () => {}
-
-    // render shimeji on screen on topmost of <body>
-    return (
-        <div
-            ref={ref}
-            className='shimeji-container'
-            style={{ width: WIDTH, height: HEIGHT, position: 'fixed', left: position.x, bottom: position.y }}
-            onContextMenu={handleRightClick}
-            onPaneClick={handlePaneClick}
-        >
-
-            {menu && <ContextMenu
-                onClick={handlePaneClick} {...menu}
-            />}
-        </div>
-    );
-
-    // generate a new time out duration for an action
-    const generateTimeOutDuration = () => {
-        return Math.floor( Math.random() * (MAX_DURATION_MS - MIN_DURATION_MS + 1) ) + MIN_DURATION_MS;
-    }
-
-    // change the action of shimeji to be dragging when dragged by cursor
-    const handleDrag = (event) => {}
-
-
-    // run shimeji animation
-    const runShimeji = () => {}
-
-    // animate standing
-    const stand = () => {}
-
-    // animate walking
-    const walk = () => {}
-
-    // animate sleeping
-    const sleep = () => {}
-
-    // animate climbing
-    const climb = () => {}
-
-    // animate dragging
-    const drag = () => {}
-}
-
->>>>>>> 49a9a1531116b6f4833a4b924728cfea90e101db
 export default Shimeji;

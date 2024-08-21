@@ -1,0 +1,33 @@
+div.shimeji-menu.active {
+    visibility: visible;
+    opacity: 1;
+    width: 100px;
+    display: flex;
+    flex-direction: column;
+    background-color: rgb(173, 173, 173);
+    border-radius: 3px;
+    padding: 3px;
+}
+
+div.shimeji-menu.inactive {
+    visibility: hidden;
+}
+
+button.shimeji-menu-btn {
+    width: 100%;
+    background-color: transparent;
+    border: none;
+    border-radius: 3px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    color: black;
+    margin: 1px 0;
+}
+
+button.shimeji-menu-btn:hover {
+    background-color: rgba(0,0,0,25%);
+    color: white;
+    font-weight: bold;
+}
