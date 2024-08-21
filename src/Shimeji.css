@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 
 /* main wrapper container for shimeji object */
 .shimeji-container {
@@ -5,4 +6,13 @@
     background-size: 100%;
     background-repeat: no-repeat;
     background-position: center;
+=======
+
+/* main wrapper container for shimeji object */
+.shimeji-container {
+    background-image: url(./images/shime1.png);
+    background-size: 100%;
+    background-repeat: no-repeat;
+    background-position: center;
+>>>>>>> 49a9a1531116b6f4833a4b924728cfea90e101db
 }
