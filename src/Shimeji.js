@@ -40,6 +40,8 @@ const Shimeji = ({
         },
         toggled: false,
     });
+
+    // right click menu DOM reference
     const contextMenuRef = useRef(null);
 
     // generate a new time out for 1st shimeji action
