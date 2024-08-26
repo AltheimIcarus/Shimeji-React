@@ -1,29 +1,19 @@
 import { React, useEffect, useState } from 'react';
 
 const ShimejiFrame = ({
-    action,
     sources=[],
-    frameRate=20
+    frameRate=20,
+    play,
 }) => {
-    // start
-    // animation styles
-    const [styles, setStyle] = useState({
-        opacity: 1,
-        visibility: 'visible'
-    });
-
-    // set if animation is paused (false) or played (true)
-    const [play, setPlay] = useState(false);
-
     // track current frame of animation
     const [currFrame, setFrame] = useState(0);
     
-    // play animation with timeout
+    // play animation with timeout to change to next frame
     useEffect(() => {
         if (play) {
             return () => {
                 setTimeout(
-                    () => setFrame(currFrame + 1),
+                    () => setFrame( (currFrame + 1) % sources.length),
                     1000 / frameRate
                 );
             };
@@ -33,10 +23,7 @@ const ShimejiFrame = ({
     }, [play, frame]);
 
     return (
-        <div
-            style={styles}
-            onClick={setPlay(!play)}
-        >
+        <div>
             {sources.map((frame, index) => {
                 <img
                     src={frame}
