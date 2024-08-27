@@ -51,6 +51,9 @@ const Shimeji = ({
     // set if animation is paused (false) or played (true)
     const [play, setPlay] = useState(true);
 
+    // set if animation is restarted from first frame
+    const [restart, setRestart] = useState(true);
+
     // right click menu DOM reference
     const contextMenuRef = useRef(null);
 
@@ -125,10 +128,18 @@ const Shimeji = ({
         setPlay(true);
     }
 
+    // pause shimeji animation at current frame
     const pauseShimeji = () => {
         setPlay(false);
     }
 
+    // restart shimeji animation
+    const restartShimeji = () => {
+        setRestart(true);
+        setPlay(true);
+    }
+
+    // pause current shimeji animation and change to drag animation temporarily
     const dragShimeji = () => {
         pauseShimeji();
     }
@@ -163,75 +174,6 @@ const Shimeji = ({
         duplicate(id); // pass reference id back to main app
     };
 
-    // animate standing
-    const stand = () => {
-        return (
-            <ShimejiFrame
-                play={play}
-                frameRate={FRAME_RATE}
-            />
-        );
-    }
-
-    // animate walking
-    const walk = () => {
-        return (
-            <ShimejiFrame
-                play={play}
-                frameRate={FRAME_RATE}
-            />
-        );
-    }
-
-    // animate sleeping
-    const sleep = () => {
-        return (
-            <ShimejiFrame
-                play={play}
-                frameRate={FRAME_RATE}
-            />
-        );
-    }
-
-    // animate climbing
-    const climb = () => {
-        return (
-            <ShimejiFrame
-                play={play}
-                frameRate={FRAME_RATE}
-            />
-        );
-    }
-    
-    // animate dragging
-    const drag = () => {
-        return (
-            <ShimejiFrame
-                play={play}
-                frameRate={FRAME_RATE}
-            />
-        );
-    }
-
-    // controller to change action animation frame using cache copy (to avoid reloading source img when action is changed)
-    const getActionFrame = cache( (action) => {
-        setAction(action);
-        switch (action) {
-            case 1:
-                return stand();
-            case 1:
-                return walk();
-            case 1:
-                return sleep();
-            case 1:
-                return climb();
-            case 1:
-                return drag();
-            default:
-                return stand();
-        };
-    });
-
     // render shimeji on screen on topmost of <body>
     return (
         <div
@@ -242,7 +184,14 @@ const Shimeji = ({
             onMouseUp={playShimeji}
         >
 
-            {getActionFrame(action)}
+            {Object.keys(actions).map((actionID, index) => {
+                <ShimejiFrame
+                    play={play}
+                    frameRate={FRAME_RATE}
+                    style={action===actionID? {visibility: 'visible', opacity: 1} : {visibility: 'hidden', opacity: 0}}
+                    reset={restart}
+                />
+            })}
 
             <ContextMenu               // right click context menu component in ContextMenu.js
                 contextMenuRef={contextMenuRef}
