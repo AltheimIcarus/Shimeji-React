@@ -1,10 +1,11 @@
 import {React, useEffect, useRef, useState} from 'react';
+import Draggable from 'react-draggable';
 import ContextMenu from './components/ContextMenu';
 import './Shimeji.css';
 import ShimejiFrame from './components/ShimejiFrame';
 
 // fixed shimeji size in pixel
-const WIDTH = 30;
+const WIDTH = 50;
 const HEIGHT = 50;
 
 // min and max animation repeat duration
@@ -13,6 +14,9 @@ const MAX_DURATION_MS = 30000;
 
 // Default frame rate of animation
 const FRAME_RATE = 20;
+
+// Default gravity falling speed (px)
+const GRAVITY_PIXEL = 20;
 
 // DO NOT CHANGE, YOU MAY ADD NEW ACTION BUT DO NOT ALTER EXISTING VALUE
 // available action animation of shimeji
@@ -36,6 +40,16 @@ const Shimeji = ({
         y: 10,
     });
 
+    // generate a new time out for shimeji action
+    const generateTimeOutDuration = () => {
+        return Math.floor( Math.random() * (MAX_DURATION_MS - MIN_DURATION_MS + 1) ) + MIN_DURATION_MS;
+    }
+
+    // generate a random shimeji action id
+    const generateActionID = () => {
+        return Math.floor( Math.random() * Object.keys(actions).length );
+    }
+
     // track action animation timeout
     const [timeout, setAnimationTimeout] = useState( generateTimeOutDuration() );
 
@@ -57,15 +71,15 @@ const Shimeji = ({
     // right click menu DOM reference
     const contextMenuRef = useRef(null);
 
-    // generate a new time out for shimeji action
-    const generateTimeOutDuration = () => {
-        return Math.floor( Math.random() * (MAX_DURATION_MS - MIN_DURATION_MS + 1) ) + MIN_DURATION_MS;
-    }
+    // variable to calculate time elapsed since beginning of any action animation
+    // handles pause and resume play animation
+    const [endTime, setEndTime] = useState(Date.now());
 
-    // generate a random shimeji action id
-    const generateActionID = () => {
-        return Math.floor( Math.random() * Object.keys(actions).length );
-    }
+    // track is shimeji being dragged
+    const [isDragged, setIsDragged] = useState(false);
+
+    // track the actionID before user firing a drag event to resume the same action animation on drag end
+    let actionIDBeforeDrag = 0;
 
     // handle right click to open menu
     const handleRightClick = (e) => {
@@ -133,28 +147,64 @@ const Shimeji = ({
         setPlay(false);
     }
 
-    // restart shimeji animation
-    const restartShimeji = () => {
-        setRestart(true);
-        setPlay(true);
-    }
-
-    // pause current shimeji animation and change to drag animation temporarily
-    const dragShimeji = () => {
+    // handle drag start shimeji event
+    const handleDragStart = () => {
+        setIsDragged(true);
         pauseShimeji();
+        actionIDBeforeDrag = action;
+        setAction(4);   // actionID for dragging animation frame
     }
 
-    // handle shimeji movement in XY axis
-    //////////////////////////////////////////////////////////////////////////////
+    // handle falling animation due to gravity
+    const fall = async (x, y) => {
+        let currY = y;
+        while (currY < window?.innerHeight) {
+            currY += GRAVITY_PIXEL;
+            await new Promise(r => setTimeout(r, 1000/FRAME_RATE));
+            if ( (currY + HEIGHT) > window?.innerHeight) {
+                setPosition({x: x, y: window?.innerHeight - HEIGHT});
+            } else {
+                setPosition({x: x, y: currY});
+            }
+        }
+        return;
+    }
 
-    // handle timeout and reset of timeout when play state is changed
+    // handle drag end shimeji event
+    const handleDragEnd = (e, data) => {
+        setIsDragged(false);
+        setPosition({
+            x: data.x,
+            y: data.y
+        });
+        fall(data.x, data.y);   // handle falling animation
+        setAction(actionIDBeforeDrag);   // actionID for dragging animation frame
+        playShimeji();
+        const remainTime = endTime - Date.now();
+        setAnimationTimeout(remainTime);
+    }
+
+    // change to drag animation temporarily
+    // handle while dragggin shimeji event
+    const dragShimeji = (e, data) => {
+        //setAction(4);
+    }
+
+    useEffect(() => {
+        fall(position.x, position.y);
+    }, []);
+
+    // handle timeout and reset of timeout
     useEffect(() => {
         if (play) {
             return () => {
                 setTimeout(
                     () => {
-                        setAnimationTimeout( generateTimeOutDuration() );
-                        setAction( generateActionID() );
+                        setAnimationTimeout( generateTimeOutDuration() );   // set new duration for next action
+                        setAction( generateActionID() );                    // set action animation
+                        setRestart(true);                                   // start animation from frame 1
+                        playShimeji();                                      // start animation for shimeji frame component
+                        setEndTime(Date.now() + timeout);                   // record start time for new action
                     },
                     timeout
                 );
@@ -162,7 +212,7 @@ const Shimeji = ({
         }
         
         return;
-    }, [play, timeout]);
+    }, [timeout]);
     
     // remove shimeji with parent's function
     const removeShimeji = () => {
@@ -176,32 +226,40 @@ const Shimeji = ({
 
     // render shimeji on screen on topmost of <body>
     return (
-        <div
-            className='shimeji-container'
-            style={{ width: WIDTH, height: HEIGHT, left: position.x, bottom: position.y, visibility: showShimeji? 'visible':'hidden', opacity: showShimeji? '1':'0' }}
-            onContextMenu={(e) => handleRightClick(e)}    // invoke right click context menu
-            onMouseDown={dragShimeji}
-            onMouseUp={playShimeji}
+        <Draggable
+            position={position}
+            onStart={handleDragStart}
+            onDrag={dragShimeji}
+            onStop={handleDragEnd}
+            bounds={"Body"}
+            scale={1}
         >
+            <div
+                className='shimeji-container'
+                style={{ width: WIDTH, height: HEIGHT, left: 0, top: 0, visibility: showShimeji? 'visible':'hidden', opacity: showShimeji? '1':'0' }}
+                onContextMenu={(e) => handleRightClick(e)}    // invoke right click context menu
+            >
 
-            {Object.keys(actions).map((actionID, index) => {
-                <ShimejiFrame
-                    play={play}
-                    frameRate={FRAME_RATE}
-                    style={action===actionID? {visibility: 'visible', opacity: 1} : {visibility: 'hidden', opacity: 0}}
-                    reset={restart}
+                {Object.keys(actions).map((actionID, index) => (
+                    <ShimejiFrame
+                        play={play}
+                        frameRate={FRAME_RATE}
+                        style={action===actionID? {visibility: 'visible', opacity: 1} : {visibility: 'hidden', opacity: 0}}
+                        reset={restart}
+                        key={index}
+                    />
+                ))}
+
+                <ContextMenu               // right click context menu component in ContextMenu.js
+                    contextMenuRef={contextMenuRef}
+                    isToggled={menu.toggled}        // check if context menu is shown
+                    positionY={menu.position.y}     // set top position of context menu
+                    positionX={menu.position.x}     // set left position of context menu
+                    remove={removeShimeji}          // pass current removeShimeji function to be invoked by pressing remove button in context menu
+                    duplicate={duplicateShimeji}    // pass current duplicateShimeji function to be invoked by pressing duplicate button in context menu
                 />
-            })}
-
-            <ContextMenu               // right click context menu component in ContextMenu.js
-                contextMenuRef={contextMenuRef}
-                isToggled={menu.toggled}        // check if context menu is shown
-                positionY={menu.position.y}     // set top position of context menu
-                positionX={menu.position.x}     // set left position of context menu
-                remove={removeShimeji}          // pass current removeShimeji function to be invoked by pressing remove button in context menu
-                duplicate={duplicateShimeji}    // pass current duplicateShimeji function to be invoked by pressing duplicate button in context menu
-            />
-        </div>
+            </div>
+        </Draggable>
     );
 
 }

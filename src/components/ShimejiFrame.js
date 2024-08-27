@@ -10,19 +10,21 @@ const ShimejiFrame = ({
 }) => {
     // track current frame of animation
     const [currFrame, setFrame] = useState(0);
-    const intervalT = null;
+    const [intervalT, setIntervalHandler] = useState(null);
     
     // function to cancel animation interval
     const cancelInterval = () => clearInterval(intervalT);
 
     // play animation with timeout to change to next frame
     useEffect(() => {
-        if (play) {
+        if (play && sources.length>1) {
             return () => {
-                intervalT = setInterval(
-                    () => setFrame( (currFrame + 1) % sources.length),
-                    TIME_SECOND_IN_MS / frameRate
-                );
+                setIntervalHandler(
+                    setInterval(
+                        () => setFrame( (currFrame + 1) % sources.length),
+                        TIME_SECOND_IN_MS / frameRate
+                    )
+                )
             };
         }
         
@@ -43,13 +45,14 @@ const ShimejiFrame = ({
 
     return (
         <div>
-            {sources.map((frame, index) => {
+            {sources.map((frame, index) => (
                 <img
                     src={frame}
                     className='shimeji-frame'
+                    key={index}
                     style={index===currFrame? {opacity: 1} : {opacity: 0}}
                 />
-            })}
+            ))}
         </div>
     );
 }
