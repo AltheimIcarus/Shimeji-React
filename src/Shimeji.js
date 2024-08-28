@@ -1,4 +1,4 @@
-import {React, useEffect, useRef, useState} from 'react';
+import {React, useEffect, useReducer, useRef, useState} from 'react';
 import Draggable from 'react-draggable';
 import ContextMenu from './components/ContextMenu';
 import './Shimeji.css';
@@ -13,10 +13,10 @@ const MIN_DURATION_MS = 10000;
 const MAX_DURATION_MS = 30000;
 
 // Default frame rate of animation
-const FRAME_RATE = 20;
+const FRAME_RATE = 5;  // must be lesser than 1000, 5 is recommended
 
-// Default gravity falling speed (px)
-const GRAVITY_PIXEL = 20;
+// Default gravity falling speed (px), 1 is recommended
+const GRAVITY_PIXEL = 1;
 
 // DO NOT CHANGE, YOU MAY ADD NEW ACTION BUT DO NOT ALTER EXISTING VALUE
 // available action animation of shimeji
@@ -28,31 +28,117 @@ const actions = {
     4: 'dragging',
 };
 
+// generate a new time out for shimeji action
+const generateTimeOutDuration = () => {
+    return Math.floor( Math.random() * (MAX_DURATION_MS - MIN_DURATION_MS + 1) ) + MIN_DURATION_MS;
+}
+
+// generate a random shimeji action id
+const generateActionID = () => {
+    return Math.floor( Math.random() * Object.keys(actions).length );
+}
+
+// util function to mimic sleep()
+const sleep = async (timeMs) => {
+    await new Promise(r => setTimeout(r, timeMs));
+}
+
+const shimejiReducer = (state, action) => {
+    switch (action.type) {
+        case 'drag-start': {
+            return {
+                ...state,
+                play: false,
+                actionIDBeforeDrag: state.action,
+                action: 4,   // actionID for dragging animation frame
+                isDragged: true,
+            };
+        }
+        case 'drag-end': {
+            const remainTime = state.endTime - Date.now();
+            return {
+                ...state,
+                position: {
+                    ...state.position,
+                    x: action.value.x,
+                    y: action.value.y
+                },
+                action: state.actionIDBeforeDrag,   // actionID for dragging animation frame
+                play: true,
+                timeout: remainTime,
+                isDragged: false,
+                isFalling: ((action.value.y + HEIGHT) < action.max_height && action.value.x > 0 && (action.value.x + WIDTH) < action.max_width),
+            };
+        }
+        case 'fall': {                             // handle falling animation
+            let currY = state.position.y + GRAVITY_PIXEL;
+            if ( (currY + HEIGHT) > action.max_height) {
+                currY = action.max_height - HEIGHT;
+            }
+            return {
+                ...state,
+                position: {
+                    ...state.position,
+                    x: state.position.x,
+                    y: currY,
+                },
+                isDragged: false,
+                isFalling: (currY + HEIGHT) < action.max_height,
+            };
+        }
+        case 'land': {                             // handle falling animation
+            return {
+                ...state,
+                isFalling: false,
+            };
+        }
+        case 'timeout': {
+            const newTimeout = generateTimeOutDuration();
+            return {
+                ...state,
+                timeout: newTimeout,                // set new duration for next action
+                action: generateActionID(),         // set action animation
+                restart: true,                      // start animation from frame 1
+                play: true,                         // start animation for shimeji frame component
+                endTime: Date.now() + newTimeout,   // record start time for new action
+            };
+        }
+        case 'remove': {
+            return {
+                ...state,
+                showShimeji: false,
+            };
+        }
+        default: {
+            return {...state};
+        }
+    }
+};
+
+const initialState = {
+    showShimeji: true,
+    action: 0,
+    position: {
+        x: 200,
+        y: 10,
+    },
+    timeout: generateTimeOutDuration(), // track action animation timeout
+    play: true,                         // set if animation is paused (false) or played (true)
+    restart: true,                      // set if animation is restarted from first frame
+    endTime: Date.now(),                // variable to calculate time elapsed since beginning of any action animation, handles pause and resume play animation
+    actionIDBeforeDrag: 0,              // track the actionID before user firing a drag event to resume the same action animation on drag end
+    isDragged: false,                   // track if shimeji is being dragged
+    isFalling: true,                    // track if shimeji is not attached to left and right most wall and is falling
+};
+
 const Shimeji = ({
     id,             // id of current shimeji instance
     remove,         // parent's function for removing a shimeji with id
     duplicate,      // parent's function for duplication a shimeji with id
 }) => {
-    const [showShimeji, setShowShimeji] = useState(true);
-    const [action, setAction] = useState(0);
-    const [position, setPosition] = useState({
-        x: 200,
-        y: 10,
-    });
-
-    // generate a new time out for shimeji action
-    const generateTimeOutDuration = () => {
-        return Math.floor( Math.random() * (MAX_DURATION_MS - MIN_DURATION_MS + 1) ) + MIN_DURATION_MS;
-    }
-
-    // generate a random shimeji action id
-    const generateActionID = () => {
-        return Math.floor( Math.random() * Object.keys(actions).length );
-    }
-
-    // track action animation timeout
-    const [timeout, setAnimationTimeout] = useState( generateTimeOutDuration() );
-
+    const [state, dispatch] = useReducer(shimejiReducer, initialState);
+    const { showShimeji, action, position, timeout, play, restart, endTime, actionIDBeforeDrag, isDragged, isFalling } = state;
+    
     // right click menu state
     const [menu, setMenu] = useState({
         position: {
@@ -62,24 +148,8 @@ const Shimeji = ({
         toggled: false,
     });
 
-    // set if animation is paused (false) or played (true)
-    const [play, setPlay] = useState(true);
-
-    // set if animation is restarted from first frame
-    const [restart, setRestart] = useState(true);
-
     // right click menu DOM reference
     const contextMenuRef = useRef(null);
-
-    // variable to calculate time elapsed since beginning of any action animation
-    // handles pause and resume play animation
-    const [endTime, setEndTime] = useState(Date.now());
-
-    // track is shimeji being dragged
-    const [isDragged, setIsDragged] = useState(false);
-
-    // track the actionID before user firing a drag event to resume the same action animation on drag end
-    let actionIDBeforeDrag = 0;
 
     // handle right click to open menu
     const handleRightClick = (e) => {
@@ -99,21 +169,10 @@ const Shimeji = ({
 
         setMenu({
             position: {
-                x,
-                y,
+                x: x,
+                y: y,
             },
             toggled: true,
-        });
-    };
-
-    // close right click menu
-    const closeContextMenu = () => {
-        setMenu({
-            position: {
-                x: 0,
-                y: 0,
-            },
-            toggled: false,
         });
     };
 
@@ -125,7 +184,13 @@ const Shimeji = ({
                 // check if right click menu component is the one that trigger this function call
                 if (!contextMenuRef.current.contains(e.target)) {
                     // close right click menu
-                    closeContextMenu();
+                    setMenu({
+                        position: {
+                            x: 0,
+                            y: 0,
+                        },
+                        toggled: false,
+                    });
                 }
             }
         };
@@ -137,62 +202,20 @@ const Shimeji = ({
         };
     });
 
-    // run shimeji animation
-    const playShimeji = () => {
-        setPlay(true);
-    }
-
-    // pause shimeji animation at current frame
-    const pauseShimeji = () => {
-        setPlay(false);
-    }
-
-    // handle drag start shimeji event
-    const handleDragStart = () => {
-        setIsDragged(true);
-        pauseShimeji();
-        actionIDBeforeDrag = action;
-        setAction(4);   // actionID for dragging animation frame
-    }
-
-    // handle falling animation due to gravity
-    const fall = async (x, y) => {
-        let currY = y;
-        while (currY < window?.innerHeight) {
-            currY += GRAVITY_PIXEL;
-            await new Promise(r => setTimeout(r, 1000/FRAME_RATE));
-            if ( (currY + HEIGHT) > window?.innerHeight) {
-                setPosition({x: x, y: window?.innerHeight - HEIGHT});
-            } else {
-                setPosition({x: x, y: currY});
-            }
-        }
-        return;
-    }
-
-    // handle drag end shimeji event
-    const handleDragEnd = (e, data) => {
-        setIsDragged(false);
-        setPosition({
-            x: data.x,
-            y: data.y
-        });
-        fall(data.x, data.y);   // handle falling animation
-        setAction(actionIDBeforeDrag);   // actionID for dragging animation frame
-        playShimeji();
-        const remainTime = endTime - Date.now();
-        setAnimationTimeout(remainTime);
-    }
-
-    // change to drag animation temporarily
-    // handle while dragggin shimeji event
-    const dragShimeji = (e, data) => {
-        //setAction(4);
-    }
 
     useEffect(() => {
-        fall(position.x, position.y);
-    }, []);
+        if (!isDragged && isFalling) {
+            return () => {
+                if (position.x > 0 && position.x + WIDTH < window?.innerWidth) {
+                    sleep(1000/FRAME_RATE);
+                    dispatch({ type: 'fall', max_height: window?.innerHeight });
+                }
+            };
+        }
+        return () => {
+            dispatch({ type: 'land' });
+        };
+    }, [isDragged, isFalling, position]);
 
     // handle timeout and reset of timeout
     useEffect(() => {
@@ -200,11 +223,7 @@ const Shimeji = ({
             return () => {
                 setTimeout(
                     () => {
-                        setAnimationTimeout( generateTimeOutDuration() );   // set new duration for next action
-                        setAction( generateActionID() );                    // set action animation
-                        setRestart(true);                                   // start animation from frame 1
-                        playShimeji();                                      // start animation for shimeji frame component
-                        setEndTime(Date.now() + timeout);                   // record start time for new action
+                        dispatch({ type: 'timeout' });
                     },
                     timeout
                 );
@@ -212,11 +231,12 @@ const Shimeji = ({
         }
         
         return;
-    }, [timeout]);
+    }, [play, timeout]);
     
     // remove shimeji with parent's function
     const removeShimeji = () => {
         remove(id); // pass reference id back to main app
+        dispatch({ type: 'remove' });
     };
 
     // duplicate shimeji with parent's function
@@ -228,9 +248,13 @@ const Shimeji = ({
     return (
         <Draggable
             position={position}
-            onStart={handleDragStart}
-            onDrag={dragShimeji}
-            onStop={handleDragEnd}
+            onStart={() => dispatch({ type: 'drag-start' })}    // handle drag start shimeji event
+            onStop={(e, data) => {                              // handle drag end shimeji event
+                dispatch({ type: 'drag-end', value: {
+                    x: data.x,
+                    y: data.y,
+                }, max_height: window?.innerHeight, max_width: window?.innerWidth });
+            }}
             bounds={"Body"}
             scale={1}
         >
