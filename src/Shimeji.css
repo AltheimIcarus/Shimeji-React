@@ -1,9 +1,18 @@
 
 /* main wrapper container for shimeji object */
 .shimeji-container {
-    background-image: url(./images/shime1.png);
+    /* background-image: url(../public/images/shime1.png); */
     background-size: 100%;
     background-repeat: no-repeat;
     background-position: center;
     position: fixed;
+}
+
+img.shimeji-frame {
+    width: 100%;
+    height: auto;
+    display: inline;
+    position: absolute;
+    left: 0;
+    top: 0;
 }

@@ -1,38 +1,37 @@
 import { React, useEffect, useState } from 'react';
+import * as constants from '../config';
+import { ACTIONS_SOURCES } from './ShimejiSources';
+import { UseFrameLoop } from './UseFrameLoop';
 
-const TIME_SECOND_IN_MS = 1000;
+// util function to mimic sleep()
+const sleep = async (timeMs) => {
+    await new Promise(r => setTimeout(r, timeMs));
+}
 
 const ShimejiFrame = ({
-    sources=[],
-    frameRate=20,
     play,
     reset,
+    key,
+    actionName,
+    actionID,
+    currentAction,
 }) => {
     // track current frame of animation
     const [currFrame, setFrame] = useState(0);
-    const [intervalT, setIntervalHandler] = useState(null);
-    
-    // function to cancel animation interval
-    const cancelInterval = () => clearInterval(intervalT);
 
     // play animation with timeout to change to next frame
     useEffect(() => {
-        if (play && sources.length>1) {
-            return () => {
-                setIntervalHandler(
-                    setInterval(
-                        () => setFrame( (currFrame + 1) % sources.length),
-                        TIME_SECOND_IN_MS / frameRate
-                    )
-                )
-            };
-        }
-        
-        return () => {
-            cancelInterval();       // cancel the animation interval as pause
-            setFrame(currFrame);    // trigger rerender for pause
+        const handlePlay = () => {
+            if (play && ACTIONS_SOURCES[actionName].length>1 && currentAction === actionID) {
+                return () => {
+                    sleep(constants.TIME_SECOND_IN_MS);
+                    setFrame( (currFrame + 1) % ACTIONS_SOURCES[actionName].length);
+                };
+            }
         };
-    }, [play]);
+        
+        return () => {handlePlay()};
+    }, [play, currentAction, currFrame]);
 
     useEffect(() => {
         if (reset) {
@@ -44,13 +43,17 @@ const ShimejiFrame = ({
     }, [reset]);
 
     return (
-        <div>
-            {sources.map((frame, index) => (
+        <div
+            style={currentAction===actionID? {visibility: 'visible', opacity: 1} : {visibility: 'hidden', opacity: 0}}
+            id={`${actionName}`}
+        >
+            {ACTIONS_SOURCES[actionName].map((frame, index) => (
                 <img
-                    src={frame}
+                    src={process.env.PUBLIC_URL + frame}
                     className='shimeji-frame'
                     key={index}
                     style={index===currFrame? {opacity: 1} : {opacity: 0}}
+                    alt={`shimeji-frame-${actionName}-${index}`}
                 />
             ))}
         </div>
