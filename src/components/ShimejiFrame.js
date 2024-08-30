@@ -19,19 +19,26 @@ const ShimejiFrame = ({
     // track current frame of animation
     const [currFrame, setFrame] = useState(0);
 
+    const FRAME_COUNT = ACTIONS_SOURCES[actionName].length;
+
+    const loopFrame = async () => {
+        await sleep(constants.TIME_SECOND_IN_MS);
+        setFrame( (currFrame + 1) % FRAME_COUNT);
+        loopFrame();
+    }
+
     // play animation with timeout to change to next frame
     useEffect(() => {
         const handlePlay = () => {
-            if (play && ACTIONS_SOURCES[actionName].length>1 && currentAction === actionID) {
+            if (play && currentAction === actionID) {
                 return () => {
-                    sleep(constants.TIME_SECOND_IN_MS);
-                    setFrame( (currFrame + 1) % ACTIONS_SOURCES[actionName].length);
+                    loopFrame();
                 };
             }
         };
         
-        return () => {handlePlay()};
-    }, [play, currentAction, currFrame]);
+        return () => handlePlay;
+    }, [play, currentAction]);
 
     useEffect(() => {
         if (reset) {

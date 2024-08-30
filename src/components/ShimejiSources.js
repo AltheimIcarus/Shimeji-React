@@ -38,4 +38,13 @@ export const ACTIONS_SOURCES = {
         '/images/shime40.png',
         '/images/shime41.png',
     ],
+    'dragging'  : [
+        '/images/shime10.png',
+    ],
+    'falling'  : [
+        '/images/shime4.png',
+    ],
+    'landing'  : [
+        '/images/shime19.png',
+    ],
 };

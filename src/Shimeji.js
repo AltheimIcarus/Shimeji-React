@@ -45,7 +45,7 @@ const Shimeji = ({
     const [action, setAction, actionRef] = useState(constants.ACTIONS.standing);
     
     // track action animation timeout
-    const [timeout, setTimeout, timeoutRef] = useState(generateTimeOutDuration());
+    const [actionTimeout, setActionTimeout, actionTimeoutRef] = useState(setTimeout(()=>nextAction, generateTimeOutDuration()));
     // set if animation is paused (false) or played (true)
     const [play, setPlay, playRef] = useState(false);
     // set if animation is restarted from first frame
@@ -123,6 +123,13 @@ const Shimeji = ({
         };
     });
 
+    // handle landing animation
+    const land = async () => {
+        await sleep(constants.FPS_INTERVAL * 2);
+        setAction(constants.ACTIONS.landing);
+        await sleep(constants.FPS_INTERVAL * 5);
+    }
+
     // handle falling animation
     const fall = async () => {
         if (shouldFall(positionRef.current.x, positionRef.current.y, window?.innerWidth, window?.innerHeight) && !isDraggedRef.current) {
@@ -133,30 +140,36 @@ const Shimeji = ({
             }
             await sleep(constants.FPS_INTERVAL);
             setPosition({
-                ...positionRef,
                 x: positionRef.current.x,
                 y: currY,
             });
             fall();
+        } else {
+            await land();
+            await resume();
+            return;
         }
         return;
     }
 
     // resume to action animation prior to dragging
-    const resume = () => {
+    const resume = async () => {
         // actionID prior to dragging animation frame to resume animation
         const elapsedPauseTime = Date.now() - pauseStartTimeRef.current;
         const remainTime = Math.abs(endTimeRef.current - Date.now()) + elapsedPauseTime;
         setPauseStartTime(Date.now());
-        setTimeout(remainTime);
+        setActionTimeout(setTimeout(()=>nextAction, remainTime));
+        await sleep(constants.FPS_INTERVAL);
         setAction(actionIDBeforeDragRef.current);
+        setActionIDBeforeDrag(0);
         setPlay(true);
     }
 
     const nextAction = () => {
         const newTimeout = generateTimeOutDuration();
+        console.log(newTimeout);
         // set new duration for next action
-        setTimeout(newTimeout);
+        setActionTimeout(setTimeout(()=>nextAction, newTimeout));
         // set action animation
         setAction(generateActionID());
         // start animation from frame 1
@@ -167,28 +180,13 @@ const Shimeji = ({
         setEndTime(Date.now() + newTimeout)
     }
 
-    // useEffect(()=> {
-    //     //console.log('action ', action);
-    //     console.log('isDragged ', isDragged);
-    //     console.log('pos ', position);
-    //     //console.log('play ', play);
-    // }, [state]);
-
-    // handle timeout and reset of timeout
-    useEffect(() => {
-        if (playRef.current) {
-            return () => {
-                setTimeout(
-                    () => {
-                        nextAction();
-                    },
-                    timeoutRef.current
-                );
-            };
-        }
-        
-        return () => {};
-    }, [play]);
+    useEffect(()=> {
+        //console.log('action ', action);
+        //console.log('isDragged ', isDragged);
+        //console.log('pos ', position);
+        //console.log('play ', play);
+        fall();
+    }, []);
     
     // remove shimeji with parent's function
     const removeShimeji = () => {
@@ -207,6 +205,7 @@ const Shimeji = ({
         setActionIDBeforeDrag(actionRef.current);
         setIsDragged(true);
         setPauseStartTime(Date.now());
+        setAction(constants.ACTIONS.dragging);
     };
 
     // handle drag end shimeji event
@@ -217,8 +216,8 @@ const Shimeji = ({
             y: data.y,
         });
         setIsDragged(false);
+        setAction(constants.ACTIONS.falling);
         fall();
-        resume();
     };
 
     // render shimeji on screen on topmost of <body>
