@@ -1,4 +1,4 @@
-import {React, useEffect, useRef} from 'react';
+import {React, useCallback, useEffect, useRef} from 'react';
 import Draggable from 'react-draggable';
 import useState from 'react-usestateref';
 import ContextMenu from './components/ContextMenu';
@@ -36,7 +36,7 @@ const Shimeji = ({
     remove,         // parent's function for removing a shimeji with id
     duplicate,      // parent's function for duplication a shimeji with id
 }) => {
-
+    const shimejiRef = useRef(null);
     const [position, setPosition, positionRef] = useState({
         x: 200,
         y: 10,
@@ -181,12 +181,32 @@ const Shimeji = ({
         setEndTime(Date.now() + newTimeout)
     }
 
+    const handleWindowResize = useCallback((e) => {
+        if (shimejiRef.current) {
+            let x = positionRef.current.x;
+            if (shimejiRef.current.state.x + constants.WIDTH > e.currentTarget.innerWidth)
+                x = e.currentTarget.innerWidth - constants.WIDTH;
+            let y = e.currentTarget.innerHeight - constants.HEIGHT;
+            console.log(e.currentTarget.innerWidth, ' ', e.currentTarget.innerHeight);
+            setPosition({
+                ...position,
+                x: x,
+                y: y,
+            });
+        }
+    }, []);
+
     useEffect(()=> {
         //console.log('action ', action);
         //console.log('isDragged ', isDragged);
         //console.log('pos ', position);
         //console.log('play ', play);
         fall();
+        window.addEventListener('resize', handleWindowResize);
+
+        return () => {
+            window.removeEventListener('resize', handleWindowResize);
+        };
     }, []);
     
     // remove shimeji with parent's function
@@ -213,6 +233,15 @@ const Shimeji = ({
         }
     };
 
+    // handle dragging shimeji event
+    const handleDrag = async (e, data) => {
+        setPosition({
+            ...position,
+            x: data.x,
+            y: data.y,
+        });
+    }
+
     // handle drag end shimeji event
     const handleDragEnd = async (e, data) => {
         setPosition({
@@ -230,9 +259,11 @@ const Shimeji = ({
         <Draggable
             position={position}
             onStart={handleDragStart}
+            onDrag={handleDrag}
             onStop={handleDragEnd}
             bounds={"Body"}
             scale={1}
+            ref={shimejiRef}
         >
             <div
                 className='shimeji-container'
