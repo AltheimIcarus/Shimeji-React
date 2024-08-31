@@ -146,23 +146,24 @@ const Shimeji = ({
             fall();
         } else {
             await land();
-            await resume();
+            resume();
             return;
         }
         return;
     }
 
     // resume to action animation prior to dragging
-    const resume = async () => {
+    const resume = () => {
         // actionID prior to dragging animation frame to resume animation
-        const elapsedPauseTime = Date.now() - pauseStartTimeRef.current;
-        const remainTime = Math.abs(endTimeRef.current - Date.now()) + elapsedPauseTime;
-        setPauseStartTime(Date.now());
-        setActionTimeout(setTimeout(()=>nextAction, remainTime));
-        await sleep(constants.FPS_INTERVAL);
-        setAction(actionIDBeforeDragRef.current);
-        setActionIDBeforeDrag(0);
-        setPlay(true);
+        if (!playRef.current) {
+            const elapsedPauseTime = Date.now() - pauseStartTimeRef.current;
+            const remainTime = Math.abs(endTimeRef.current - Date.now()) + elapsedPauseTime;
+            setPauseStartTime(Date.now());
+            setActionTimeout(setTimeout(()=>nextAction, remainTime));
+            setAction(actionIDBeforeDragRef.current);
+            setActionIDBeforeDrag(null);
+            setPlay(true);
+        }
     }
 
     const nextAction = () => {
@@ -200,13 +201,26 @@ const Shimeji = ({
     };
 
     // handle drag start shimeji event
-    const handleDragStart = () => {
-        setPlay(false);
-        setActionIDBeforeDrag(actionRef.current);
-        setIsDragged(true);
-        setPauseStartTime(Date.now());
-        setAction(constants.ACTIONS.dragging);
+    const handleDragStart = (e, data) => {
+        e.stopPropagation();
+        if (playRef.current && !isDraggedRef.current) {
+            setPlay(false);
+            setActionIDBeforeDrag(actionRef.current);
+            console.log('dragStart => save ', actionRef.current);
+            setIsDragged(true);
+            setPauseStartTime(Date.now());
+            setAction(constants.ACTIONS.dragging);
+        }
     };
+
+    // handle dragging shimeji event
+    const handleDrag = async (e, data) => {
+        setPosition({
+            ...position,
+            x: data.x,
+            y: data.y,
+        });
+    }
 
     // handle drag end shimeji event
     const handleDragEnd = async (e, data) => {
@@ -225,6 +239,7 @@ const Shimeji = ({
         <Draggable
             position={position}
             onStart={handleDragStart}
+            onDrag={handleDrag}
             onStop={handleDragEnd}
             bounds={"Body"}
             scale={1}

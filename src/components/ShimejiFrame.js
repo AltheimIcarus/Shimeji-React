@@ -1,6 +1,6 @@
 import { React, useEffect, useState } from 'react';
 import * as constants from '../config';
-import { ACTIONS_SOURCES } from './ShimejiSources';
+import { ACTIONS_SOURCES, ACTIONS_SOURCES_IMGS } from './ShimejiSources';
 import { UseFrameLoop } from './UseFrameLoop';
 
 // util function to mimic sleep()
@@ -56,10 +56,10 @@ const ShimejiFrame = ({
         >
             {ACTIONS_SOURCES[actionName].map((frame, index) => (
                 <img
-                    src={process.env.PUBLIC_URL + frame}
+                    src={frame}
+                    style={{opacity: index===currFrame? "1":"0"}}
                     className='shimeji-frame'
                     key={index}
-                    style={index===currFrame? {opacity: 1} : {opacity: 0}}
                     alt={`shimeji-frame-${actionName}-${index}`}
                 />
             ))}
