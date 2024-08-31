@@ -15,6 +15,8 @@ Currently it supports:\
 - [x] Adjustable gravity and animation frame rate.
 - [ ] Cloning Shimeji.
 - [x] Remove Shimeji.
+- [ ] Release drag on mouseout instead of having to click on screen. (issue with react-draggable when parent and child (img) are both absolute positioned.)
+- [ ] Batch import required Shimeji images into background-image of div instead of using img tag.
 - [ ] Interact or climb onto each DOM element.
 - [ ] More functionallities to come.
 
