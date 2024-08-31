@@ -213,15 +213,6 @@ const Shimeji = ({
         }
     };
 
-    // handle dragging shimeji event
-    const handleDrag = async (e, data) => {
-        setPosition({
-            ...position,
-            x: data.x,
-            y: data.y,
-        });
-    }
-
     // handle drag end shimeji event
     const handleDragEnd = async (e, data) => {
         setPosition({
@@ -239,7 +230,6 @@ const Shimeji = ({
         <Draggable
             position={position}
             onStart={handleDragStart}
-            onDrag={handleDrag}
             onStop={handleDragEnd}
             bounds={"Body"}
             scale={1}
