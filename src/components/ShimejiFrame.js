@@ -1,6 +1,7 @@
-import { React, useEffect, useState } from 'react';
+import { React, useCallback, useEffect } from 'react';
+import useState from 'react-usestateref';
 import * as constants from '../config';
-import { ACTIONS_SOURCES, ACTIONS_SOURCES_IMGS } from './ShimejiSources';
+import { ACTIONS_SOURCES } from './ShimejiSources';
 import { UseFrameLoop } from './UseFrameLoop';
 
 // util function to mimic sleep()
@@ -17,28 +18,29 @@ const ShimejiFrame = ({
     currentAction,
 }) => {
     // track current frame of animation
-    const [currFrame, setFrame] = useState(0);
+    const [currFrame, setFrame, currFrameRef] = useState(0);
 
-    const FRAME_COUNT = ACTIONS_SOURCES[actionName].length;
+    // identify the number of frames to loop back to first frame in cycle
+    const FRAME_COUNT = ACTIONS_SOURCES[actionName].length; // trivial, no need of useMemo or useCached here
 
+    // loop over each frame at one second interval
     const loopFrame = async () => {
+        if (!play) return;
         await sleep(constants.TIME_SECOND_IN_MS);
-        setFrame( (currFrame + 1) % FRAME_COUNT);
+        setFrame( (currFrameRef.current + 1) % FRAME_COUNT);
         loopFrame();
     }
+    
+    const handlePlay = useCallback(() => {
+        if (play && currentAction === actionID) {
+            loopFrame();
+        }
+    }, [play, currentAction]);
 
     // play animation with timeout to change to next frame
-    useEffect(() => {
-        const handlePlay = () => {
-            if (play && currentAction === actionID) {
-                return () => {
-                    loopFrame();
-                };
-            }
-        };
-        
-        return () => handlePlay;
-    }, [play, currentAction]);
+    // useEffect(() => {
+    //     return () => handlePlay;
+    // }, [play, currentAction]);
 
     useEffect(() => {
         if (reset) {

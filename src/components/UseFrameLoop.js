@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { FPS_INTERVAL } from "../config";
+import { FPS_INTERVAL_ACTION } from "../config";
 
 export const UseFrameLoop = (callback) => {
     const requestID = useRef();
@@ -8,7 +8,7 @@ export const UseFrameLoop = (callback) => {
     const loop = time => {
         if (previousTime.current !== undefined) {
             const deltaTime = time - previousTime.current;
-            if (deltaTime >= FPS_INTERVAL)
+            if (deltaTime >= FPS_INTERVAL_ACTION)
                 callback(time, deltaTime);
         }
 

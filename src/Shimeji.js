@@ -12,8 +12,12 @@ const generateTimeOutDuration = () => {
 }
 
 // generate a random shimeji action id
-const generateActionID = () => {
-    return Math.floor( Math.random() * (3 + 1) );
+const generateActionID = (id=0) => {
+    let result = Math.floor( Math.random() * (constants.MAX_ACTION_ID - constants.MIN_ACTION_ID + 1) ) + constants.MIN_ACTION_ID;
+    while (result === id) {
+        result = Math.floor( Math.random() * (constants.MAX_ACTION_ID - constants.MIN_ACTION_ID + 1) ) + constants.MIN_ACTION_ID;
+    }
+    return result;
 }
 
 // util function to mimic sleep()
@@ -45,7 +49,7 @@ const Shimeji = ({
     const [action, setAction, actionRef] = useState(constants.ACTIONS.standing);
     
     // track action animation timeout
-    const [actionTimeout, setActionTimeout, actionTimeoutRef] = useState(setTimeout(()=>nextAction, generateTimeOutDuration()));
+    const [actionTimeout, setActionTimeout, actionTimeoutRef] = useState(null);
     // set if animation is paused (false) or played (true)
     const [play, setPlay, playRef] = useState(false);
     // set if animation is restarted from first frame
@@ -58,6 +62,10 @@ const Shimeji = ({
     const [actionIDBeforeDrag, setActionIDBeforeDrag, actionIDBeforeDragRef] = useState(constants.ACTIONS.standing);
     // track if shimeji is being dragged
     const [isDragged, setIsDragged, isDraggedRef] = useState(false);
+    // track shimeji move direction for walking or climbing actions, see config for list of available options
+    const [moveDirection, setMoveDirection, moveDirectionRef] = useState(null);
+    // set the rotation of the Shimeji which depends on the move direction and attached wall
+    const [rotation, setRotation, rotationRef] = useState(null);
 
     
     // right click menu state
@@ -125,9 +133,9 @@ const Shimeji = ({
 
     // handle landing animation
     const land = async () => {
-        await sleep(constants.FPS_INTERVAL * 2);
+        await sleep(constants.FPS_INTERVAL_FALLING * 2);
         setAction(constants.ACTIONS.landing);
-        await sleep(constants.FPS_INTERVAL * 5);
+        await sleep(constants.FPS_INTERVAL_FALLING * 5);
     }
 
     // handle falling animation
@@ -138,7 +146,7 @@ const Shimeji = ({
             if ( (currY + constants.HEIGHT) > window?.innerHeight) {
                 currY = window?.innerHeight - constants.HEIGHT;
             }
-            await sleep(constants.FPS_INTERVAL);
+            await sleep(constants.FPS_INTERVAL_FALLING);
             setPosition({
                 x: positionRef.current.x,
                 y: currY,
@@ -159,35 +167,133 @@ const Shimeji = ({
             const elapsedPauseTime = Date.now() - pauseStartTimeRef.current;
             const remainTime = Math.abs(endTimeRef.current - Date.now()) + elapsedPauseTime;
             setPauseStartTime(Date.now());
-            setActionTimeout(setTimeout(()=>nextAction, remainTime));
+            setActionTimeout(setTimeout(() => {
+                nextAction();
+            }, remainTime));
             setAction(actionIDBeforeDragRef.current);
             setActionIDBeforeDrag(null);
             setPlay(true);
         }
     }
 
-    const nextAction = () => {
+    const animate = async () => {
+        if (!playRef.current) {
+            //console.log('cancelled...');
+            return;
+        }
+        //console.log('animate... ', actionRef.current);
+        let newPosition = moveDirectionRef.current;
+
+        if(actionRef.current === constants.ACTIONS.walking) {
+            //console.log('walking... ');
+            newPosition += positionRef.current.x;
+            // if not hitting wall
+            if (newPosition > 0 && newPosition + constants.WIDTH < window?.innerWidth) {
+                //console.log('moving... ', positionRef.current.x, ' -> ', newPosition);
+                setPosition({
+                    ...position,
+                    x: newPosition,
+                    y: positionRef.current.y,
+                });
+                alignShimeji();
+                await sleep(constants.FPS_INTERVAL_FALLING);
+                return;
+            }
+            //console.log('hit wall... ', newPosition);
+            
+            // if 0 = hit left wall else right wall
+            newPosition = (newPosition <= 0)? 0 : window?.innerWidth - constants.WIDTH;
+            setPosition({
+                ...position,
+                x: newPosition,
+                y: positionRef.current.y,
+            });
+            alignShimeji();
+            await sleep(constants.FPS_INTERVAL_FALLING);
+            
+            // change action to climbing
+            setAction(constants.ACTIONS.climbing);
+
+            // move downward if in the sky, else move upward if on the ground
+            setMoveDirection((positionRef.current.y === 0)? constants.MOVE_PIXEL_POS : constants.MOVE_PIXEL_NEG);
+            return;
+        } else if (actionRef.current === constants.ACTIONS.climbing) {
+            //console.log('climbing... ');
+            newPosition += positionRef.current.y;
+            // if not hitting ground or sky
+            if (newPosition > 0 && newPosition + constants.HEIGHT < window?.innerHeight) {
+                //console.log('moving... ', positionRef.current.x, ' -> ', newPosition);
+                setPosition({
+                    ...position,
+                    x: positionRef.current.x,
+                    y: newPosition,
+                });
+                alignShimeji();
+                await sleep(constants.FPS_INTERVAL_FALLING);
+                return;
+            }
+            //console.log('hit sky/gnd... ', newPosition);
+
+            // if 0 = hit sky else ground
+            newPosition = (newPosition <= 0)? 0 : window?.innerHeight - constants.HEIGHT;
+            setPosition({
+                ...position,
+                x: positionRef.current.x,
+                y: newPosition,
+            });
+            alignShimeji();
+            await sleep(constants.FPS_INTERVAL_FALLING);
+
+            // change action to walking
+            setAction(constants.ACTIONS.walking);
+
+            // move rightward if on left wall, else move leftward if on right wall
+            setMoveDirection((positionRef.current.x === 0)? constants.MOVE_PIXEL_POS : constants.MOVE_PIXEL_NEG);
+            return;
+        }
+    };
+
+    const nextAction = async () => {
+        if (Date.now() < endTimeRef.current) return;
         const newTimeout = generateTimeOutDuration();
-        console.log(newTimeout);
+        clearTimeout(actionTimeoutRef.current);
+        // stop current animation
+        setPlay(false);
+        setMoveDirection(null);
         // set new duration for next action
-        setActionTimeout(setTimeout(()=>nextAction, newTimeout));
+        setActionTimeout(setTimeout(() => {
+            nextAction();
+        }, newTimeout));
         // set action animation
-        setAction(generateActionID());
+        //setAction(generateActionID(actionRef.current));
+        setAction(constants.ACTIONS.walking);
         // start animation from frame 1
         setRestart(true);
         // start animation for shimeji frame component
         setPlay(true);
+        await sleep(constants.TIME_SECOND_IN_MS);
         // record start time for new action
-        setEndTime(Date.now() + newTimeout)
+        setEndTime(Date.now() + newTimeout);
+        // if walking or climbing, set move direction
+        setMoveDirection((Math.random()>0.5)? constants.MOVE_PIXEL_NEG : constants.MOVE_PIXEL_POS);
+        let startTime = Date.now();
+        let currTime = null;
+        while (playRef.current && moveDirectionRef.current!==null && !isDraggedRef.current) {
+            currTime = Date.now();
+            if (currTime-startTime >= constants.TIME_SECOND_IN_MS) {
+                startTime = Date.now();
+                await animate();
+            }
+        }
     }
 
+    // move shimeji on windows resize
     const handleWindowResize = useCallback((e) => {
         if (shimejiRef.current) {
             let x = positionRef.current.x;
             if (shimejiRef.current.state.x + constants.WIDTH > e.currentTarget.innerWidth)
                 x = e.currentTarget.innerWidth - constants.WIDTH;
             let y = e.currentTarget.innerHeight - constants.HEIGHT;
-            console.log(e.currentTarget.innerWidth, ' ', e.currentTarget.innerHeight);
             setPosition({
                 ...position,
                 x: x,
@@ -225,8 +331,11 @@ const Shimeji = ({
         e.stopPropagation();
         if (playRef.current && !isDraggedRef.current) {
             setPlay(false);
+            if (actionTimeoutRef.current) {
+                clearTimeout(actionTimeoutRef.current);
+                setActionTimeout(null);
+            }
             setActionIDBeforeDrag(actionRef.current);
-            console.log('dragStart => save ', actionRef.current);
             setIsDragged(true);
             setPauseStartTime(Date.now());
             setAction(constants.ACTIONS.dragging);
@@ -254,6 +363,29 @@ const Shimeji = ({
         fall();
     };
 
+    // align Shimeji to appropriate rotation to face the direction it is currently moving to
+    const alignShimeji = () => {
+        if (actionRef.current===constants.ACTIONS.walking) {
+            let result = '';
+            if (positionRef.current.y === 0)
+                result = 'rotateX(180deg)';
+            if (moveDirectionRef.current > 0) {
+                console.log('should face right');
+                result += ' rotateY(180deg)';
+            }
+            setRotation(result);
+        }
+        if (actionRef.current===constants.ACTIONS.climbing) {
+            let result = '';
+            if (positionRef.current.x !== 0)
+                result = 'rotateY(180deg)';
+            if (moveDirectionRef.current > 0)
+                result += ' rotateX(180deg)';
+            setRotation(result);
+        }
+        return '';
+    };
+
     // render shimeji on screen on topmost of <body>
     return (
         <Draggable
@@ -267,7 +399,15 @@ const Shimeji = ({
         >
             <div
                 className='shimeji-container'
-                style={{ width: constants.WIDTH, height: constants.HEIGHT, left: 0, top: 0, visibility: showShimeji? 'visible':'hidden', opacity: showShimeji? '1':'0' }}
+                style={{
+                    width: constants.WIDTH,
+                    height: constants.HEIGHT,
+                    left: 0,
+                    top: 0,
+                    visibility: showShimeji? 'visible':'hidden',
+                    opacity: showShimeji? '1':'0',
+                    transform: rotationRef.current
+                }}
                 onContextMenu={(e) => handleRightClick(e)}    // invoke right click context menu
             >
 
@@ -283,7 +423,7 @@ const Shimeji = ({
                     />
                 ))}
 
-                <ContextMenu               // right click context menu component in ContextMenu.js
+                <ContextMenu                        // right click context menu component in ContextMenu.js
                     contextMenuRef={contextMenuRef}
                     isToggled={menu.toggled}        // check if context menu is shown
                     positionY={menu.position.y}     // set top position of context menu
