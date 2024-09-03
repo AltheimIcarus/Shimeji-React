@@ -16,6 +16,7 @@ const ShimejiFrame = ({
     actionName,
     actionID,
     currentAction,
+    rotation,
 }) => {
     // track current frame of animation
     const [currFrame, setFrame, currFrameRef] = useState(0);
@@ -53,6 +54,7 @@ const ShimejiFrame = ({
 
     return (
         <div
+            className={`${rotation}`}
             style={currentAction===actionID? {visibility: 'visible', opacity: 1} : {visibility: 'hidden', opacity: 0}}
             id={`${actionName}`}
         >

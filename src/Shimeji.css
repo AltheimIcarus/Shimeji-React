@@ -8,6 +8,13 @@
     position: fixed;
 }
 
+.flip-horizontal {
+    transform: rotateX(180deg);
+}
+.flip-vertical {
+    transform: rotateY(180deg);
+}
+
 img.shimeji-frame {
     width: 100%;
     height: auto;

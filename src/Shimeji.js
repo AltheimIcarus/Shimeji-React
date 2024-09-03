@@ -67,6 +67,9 @@ const Shimeji = ({
     // set the rotation of the Shimeji which depends on the move direction and attached wall
     const [rotation, setRotation, rotationRef] = useState(null);
 
+    // track sequence of actions so that last action animation can be successfully terminated from infinite loop
+    const [sequence, setSequence, sequenceRef] = useState(0);
+
     
     // right click menu state
     const [menu, setMenu] = useState({
@@ -177,7 +180,7 @@ const Shimeji = ({
     }
 
     const animate = async () => {
-        if (!playRef.current) {
+        if (!playRef.current || isDraggedRef.current) {
             //console.log('cancelled...');
             return;
         }
@@ -195,7 +198,6 @@ const Shimeji = ({
                     x: newPosition,
                     y: positionRef.current.y,
                 });
-                alignShimeji();
                 await sleep(constants.FPS_INTERVAL_FALLING);
                 return;
             }
@@ -228,7 +230,6 @@ const Shimeji = ({
                     x: positionRef.current.x,
                     y: newPosition,
                 });
-                alignShimeji();
                 await sleep(constants.FPS_INTERVAL_FALLING);
                 return;
             }
@@ -254,7 +255,6 @@ const Shimeji = ({
     };
 
     const nextAction = async () => {
-        if (Date.now() < endTimeRef.current) return;
         const newTimeout = generateTimeOutDuration();
         clearTimeout(actionTimeoutRef.current);
         // stop current animation
@@ -269,6 +269,9 @@ const Shimeji = ({
         setAction(constants.ACTIONS.walking);
         // start animation from frame 1
         setRestart(true);
+        // set new action sequence to terminate last animation
+        let currSequence = sequenceRef.current + 1;
+        setSequence(currSequence);
         // start animation for shimeji frame component
         setPlay(true);
         await sleep(constants.TIME_SECOND_IN_MS);
@@ -278,7 +281,8 @@ const Shimeji = ({
         setMoveDirection((Math.random()>0.5)? constants.MOVE_PIXEL_NEG : constants.MOVE_PIXEL_POS);
         let startTime = Date.now();
         let currTime = null;
-        while (playRef.current && moveDirectionRef.current!==null && !isDraggedRef.current) {
+        alignShimeji();
+        while (playRef.current && moveDirectionRef.current!==null && !isDraggedRef.current && sequenceRef.current === currSequence) {
             currTime = Date.now();
             if (currTime-startTime >= constants.TIME_SECOND_IN_MS) {
                 startTime = Date.now();
@@ -368,22 +372,24 @@ const Shimeji = ({
         if (actionRef.current===constants.ACTIONS.walking) {
             let result = '';
             if (positionRef.current.y === 0)
-                result = 'rotateX(180deg)';
+                result = 'flip-horizontal';
             if (moveDirectionRef.current > 0) {
-                console.log('should face right');
-                result += ' rotateY(180deg)';
+                result += ' flip-vertical';
             }
             setRotation(result);
+            return;
         }
         if (actionRef.current===constants.ACTIONS.climbing) {
             let result = '';
-            if (positionRef.current.x !== 0)
-                result = 'rotateY(180deg)';
+            if (positionRef.current.x + constants.WIDTH === window?.innerWidth)
+                result = 'flip-vertical';
             if (moveDirectionRef.current > 0)
-                result += ' rotateX(180deg)';
+                result += ' flip-horizontal';
             setRotation(result);
+            return;
         }
-        return '';
+        setRotation('');
+        return;
     };
 
     // render shimeji on screen on topmost of <body>
@@ -398,15 +404,14 @@ const Shimeji = ({
             ref={shimejiRef}
         >
             <div
-                className='shimeji-container'
+                className={`shimeji-container`}
                 style={{
                     width: constants.WIDTH,
                     height: constants.HEIGHT,
                     left: 0,
                     top: 0,
                     visibility: showShimeji? 'visible':'hidden',
-                    opacity: showShimeji? '1':'0',
-                    transform: rotationRef.current
+                    opacity: showShimeji? '1':'0'
                 }}
                 onContextMenu={(e) => handleRightClick(e)}    // invoke right click context menu
             >
@@ -420,6 +425,7 @@ const Shimeji = ({
                         actionName={actionName}
                         actionID={index}
                         currentAction={action}
+                        rotation={rotation}
                     />
                 ))}
 
