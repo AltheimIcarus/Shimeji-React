@@ -7,7 +7,7 @@ A spinoff idea from another repo Qwiki to create a java-like Shimeji (simple ani
 Currently it supports:\
 - [x] Falling animation due to gravity.
 - [x] Standing action animation.
-- [ ] Walking, Climbing, Sleeping, and Dragging action animations.
+- [x] Walking, Climbing, Sleeping, and Dragging action animations.
 - [x] Random next action animation and duration.
 - [x] Play and pause when dragged.
 - [x] Draggable Shimeji using react-draggable within ```<body>```.
@@ -18,6 +18,7 @@ Currently it supports:\
 - [ ] Release drag on mouseout instead of having to click on screen. (issue with react-draggable when parent and child (img) are both absolute positioned.)
 - [ ] Batch import required Shimeji images into background-image of div instead of using img tag.
 - [ ] Interact or climb onto each DOM element.
+- [ ] Add pause action (Shimeji with light bulb on head) in between each action transition
 - [ ] More functionallities to come.
 
 Submit an issue to me for additional features.
