@@ -54,8 +54,8 @@ const ShimejiFrame = ({
 
     return (
         <div
-            className={`${rotation}`}
-            style={currentAction===actionID? {visibility: 'visible', opacity: 1} : {visibility: 'hidden', opacity: 0}}
+            className='shimeji-frame-container'
+            style={{visibility: currentAction===actionID? 'visible':'hidden', opacity: currentAction===actionID? 1:0, transform: currentAction===actionID? `${rotation}` : 'none'}}
             id={`${actionName}`}
         >
             {ACTIONS_SOURCES[actionName].map((frame, index) => (

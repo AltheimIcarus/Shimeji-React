@@ -20,6 +20,14 @@ const generateActionID = (id=0) => {
     return result;
 }
 
+// generate move direction
+const generateMoveDirection = (previousDirection=null) => {
+    if (!previousDirection) return (Math.random()>0.5)? constants.MOVE_PIXEL_NEG : constants.MOVE_PIXEL_POS;
+    // 0.8 probability of returning previous direction
+    const probabilities = [previousDirection, previousDirection, previousDirection, previousDirection, (-1)*previousDirection];
+    return probabilities[ Math.floor(Math.random() * probabilities.length) ];
+}
+
 // util function to mimic sleep()
 const sleep = async (timeMs) => {
     await new Promise(r => setTimeout(r, timeMs));
@@ -42,7 +50,7 @@ const Shimeji = ({
 }) => {
     const shimejiRef = useRef(null);
     const [position, setPosition, positionRef] = useState({
-        x: 200,
+        x: 1100,
         y: 10,
     });
     const [showShimeji, setShowShimeji, showShimejiRef] = useState(true);
@@ -59,7 +67,7 @@ const Shimeji = ({
     // variable to calculate time elapsed since beginning of pause, handles pause and resume play animation
     const [pauseStartTime, setPauseStartTime, pauseStartTimeRef] = useState(Date.now());
     // track the actionID before user firing a drag event to resume the same action animation on drag end
-    const [actionIDBeforeDrag, setActionIDBeforeDrag, actionIDBeforeDragRef] = useState(constants.ACTIONS.standing);
+    const [actionIDBeforeDrag, setActionIDBeforeDrag, actionIDBeforeDragRef] = useState(constants.ACTIONS.walking);
     // track if shimeji is being dragged
     const [isDragged, setIsDragged, isDraggedRef] = useState(false);
     // track shimeji move direction for walking or climbing actions, see config for list of available options
@@ -173,7 +181,7 @@ const Shimeji = ({
             setActionTimeout(setTimeout(() => {
                 nextAction();
             }, remainTime));
-            setAction(actionIDBeforeDragRef.current);
+            setAction(constants.ACTIONS.standing);
             setActionIDBeforeDrag(null);
             setPlay(true);
         }
@@ -188,7 +196,6 @@ const Shimeji = ({
         let newPosition = moveDirectionRef.current;
 
         if(actionRef.current === constants.ACTIONS.walking) {
-            //console.log('walking... ');
             newPosition += positionRef.current.x;
             // if not hitting wall
             if (newPosition > 0 && newPosition + constants.WIDTH < window?.innerWidth) {
@@ -210,7 +217,6 @@ const Shimeji = ({
                 x: newPosition,
                 y: positionRef.current.y,
             });
-            alignShimeji();
             await sleep(constants.FPS_INTERVAL_FALLING);
             
             // change action to climbing
@@ -230,65 +236,92 @@ const Shimeji = ({
                     x: positionRef.current.x,
                     y: newPosition,
                 });
+                alignShimeji();
                 await sleep(constants.FPS_INTERVAL_FALLING);
                 return;
             }
-            //console.log('hit sky/gnd... ', newPosition);
-
+            
             // if 0 = hit sky else ground
             newPosition = (newPosition <= 0)? 0 : window?.innerHeight - constants.HEIGHT;
+            //console.log('hit sky/gnd... ', newPosition);
             setPosition({
                 ...position,
                 x: positionRef.current.x,
                 y: newPosition,
             });
-            alignShimeji();
-            await sleep(constants.FPS_INTERVAL_FALLING);
-
+            
             // change action to walking
             setAction(constants.ACTIONS.walking);
-
+            
             // move rightward if on left wall, else move leftward if on right wall
             setMoveDirection((positionRef.current.x === 0)? constants.MOVE_PIXEL_POS : constants.MOVE_PIXEL_NEG);
+            alignShimeji();
+            await sleep(constants.FPS_INTERVAL_FALLING);
             return;
         }
     };
 
     const nextAction = async () => {
         const newTimeout = generateTimeOutDuration();
+        // clear previous timeout
         clearTimeout(actionTimeoutRef.current);
+        
         // stop current animation
         setPlay(false);
-        setMoveDirection(null);
+        
         // set new duration for next action
         setActionTimeout(setTimeout(() => {
+            console.log(newTimeout);
             nextAction();
         }, newTimeout));
+        
         // set action animation
-        //setAction(generateActionID(actionRef.current));
-        setAction(constants.ACTIONS.walking);
-        // start animation from frame 1
-        setRestart(true);
-        // set new action sequence to terminate last animation
-        let currSequence = sequenceRef.current + 1;
-        setSequence(currSequence);
-        // start animation for shimeji frame component
-        setPlay(true);
-        await sleep(constants.TIME_SECOND_IN_MS);
-        // record start time for new action
-        setEndTime(Date.now() + newTimeout);
-        // if walking or climbing, set move direction
-        setMoveDirection((Math.random()>0.5)? constants.MOVE_PIXEL_NEG : constants.MOVE_PIXEL_POS);
-        let startTime = Date.now();
-        let currTime = null;
-        alignShimeji();
-        while (playRef.current && moveDirectionRef.current!==null && !isDraggedRef.current && sequenceRef.current === currSequence) {
-            currTime = Date.now();
-            if (currTime-startTime >= constants.TIME_SECOND_IN_MS) {
-                startTime = Date.now();
-                await animate();
+        let currAction = generateActionID(actionRef.current);
+        //const currAction = actionRef.current;
+        if (positionRef.current.y + constants.HEIGHT < window?.innerHeight) {
+            if (positionRef.current.x === 0 || positionRef.current.x + constants.WIDTH === window?.innerWidth) {
+                currAction = constants.ACTIONS.climbing;
+            } else {
+                currAction = constants.ACTIONS.walking;
             }
         }
+        if (actionRef.current !== currAction) {
+            setAction(currAction);
+            // start animation from frame 1
+            setRestart(true);
+        }
+
+        // start animation for shimeji frame component
+        setPlay(true);
+        
+        // set new action sequence to terminate last animation
+        const currSequence = sequenceRef.current + 1;
+        setSequence(currSequence);
+
+        // await rerender
+        await sleep(constants.TIME_SECOND_IN_MS);
+        
+        // record start time for new action
+        setEndTime(Date.now() + newTimeout);
+        
+        // if walking or climbing, set move direction
+        if (currAction === constants.ACTIONS.walking || currAction === constants.ACTIONS.climbing) {
+            setMoveDirection(generateMoveDirection(moveDirectionRef.current));
+            //setMoveDirection(moveDirectionRef.current);
+            let startTime = Date.now();
+            let currTime = null;
+            // align Shimeji to face the moving direction
+            while (playRef.current && moveDirectionRef.current!==null && !isDraggedRef.current && sequenceRef.current === currSequence) {
+                currTime = Date.now();
+                if (currTime-startTime >= constants.TIME_SECOND_IN_MS) {
+                    startTime = Date.now();
+                    alignShimeji();
+                    await animate();
+                }
+            }
+            return;
+        }
+        setMoveDirection(null);
     }
 
     // move shimeji on windows resize
@@ -339,6 +372,7 @@ const Shimeji = ({
                 clearTimeout(actionTimeoutRef.current);
                 setActionTimeout(null);
             }
+            setRotation('none');
             setActionIDBeforeDrag(actionRef.current);
             setIsDragged(true);
             setPauseStartTime(Date.now());
@@ -369,27 +403,45 @@ const Shimeji = ({
 
     // align Shimeji to appropriate rotation to face the direction it is currently moving to
     const alignShimeji = () => {
-        if (actionRef.current===constants.ACTIONS.walking) {
-            let result = '';
-            if (positionRef.current.y === 0)
-                result = 'flip-horizontal';
-            if (moveDirectionRef.current > 0) {
-                result += ' flip-vertical';
+        switch (actionRef.current) {
+            case constants.ACTIONS.walking: {
+                if (positionRef.current.y === 0) {
+                    if (moveDirectionRef.current > 0) {
+                        setRotation('scale(-1, -1)');
+                        return;
+                    }
+                    setRotation('scaleY(-1)');
+                    return;
+                }
+                if (positionRef.current.y > 0 && moveDirectionRef.current > 0) {
+                    setRotation('scaleX(-1)');
+                    return;
+                }
+                setRotation('none');
+                return;
             }
-            setRotation(result);
-            return;
+            case constants.ACTIONS.climbing: {
+                if (positionRef.current.x + constants.WIDTH >= window?.innerWidth) {
+                    if (moveDirectionRef.current > 0) {
+                        setRotation('scale(-1, -1)');
+                        return;
+                    }
+                    setRotation('scaleX(-1)');
+                    return;
+                }
+                if (positionRef.current.x === 0 && moveDirectionRef.current > 0) {
+                    setRotation('scaleY(-1)');
+                    return;
+                }
+                setRotation('none');
+                return;
+            }
+            default: {
+                // no other action is permitted when not on the ground except climbing & walking
+                setRotation('none');
+                return;
+            }
         }
-        if (actionRef.current===constants.ACTIONS.climbing) {
-            let result = '';
-            if (positionRef.current.x + constants.WIDTH === window?.innerWidth)
-                result = 'flip-vertical';
-            if (moveDirectionRef.current > 0)
-                result += ' flip-horizontal';
-            setRotation(result);
-            return;
-        }
-        setRotation('');
-        return;
     };
 
     // render shimeji on screen on topmost of <body>
@@ -429,14 +481,14 @@ const Shimeji = ({
                     />
                 ))}
 
-                <ContextMenu                        // right click context menu component in ContextMenu.js
+                {/* <ContextMenu                        // right click context menu component in ContextMenu.js
                     contextMenuRef={contextMenuRef}
                     isToggled={menu.toggled}        // check if context menu is shown
                     positionY={menu.position.y}     // set top position of context menu
                     positionX={menu.position.x}     // set left position of context menu
                     remove={removeShimeji}          // pass current removeShimeji function to be invoked by pressing remove button in context menu
                     duplicate={duplicateShimeji}    // pass current duplicateShimeji function to be invoked by pressing duplicate button in context menu
-                />
+                /> */}
             </div>
         </Draggable>
     );
