@@ -44,11 +44,11 @@ const ShimejiFrame = ({
     }, [play, currentAction]);
 
     // play animation with timeout to change to next frame
-    // useEffect(() => {
-    //     return () => {
-    //         handlePlay();
-    //     };
-    // }, [play, currentAction]);
+    useEffect(() => {
+        return () => {
+            handlePlay();
+        };
+    }, [play, currentAction]);
 
     useEffect(() => {
         if (reset) {
