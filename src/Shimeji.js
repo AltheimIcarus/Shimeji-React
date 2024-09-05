@@ -382,10 +382,18 @@ const Shimeji = ({
 
     // handle dragging shimeji event
     const handleDrag = async (e, data) => {
+        let x = null, y = null;
+        if (e.touches) {
+            x = e.touches[0].clientX;
+            y = e.touches[0].clientY;
+        } else {
+            x = e.clientX;
+            y = e.clientY;
+        }
         setPosition({
             ...position,
-            x: data.x,
-            y: data.y,
+            x: x,
+            y: y,
         });
     }
 
@@ -481,14 +489,14 @@ const Shimeji = ({
                     />
                 ))}
 
-                {/* <ContextMenu                        // right click context menu component in ContextMenu.js
+                <ContextMenu                        // right click context menu component in ContextMenu.js
                     contextMenuRef={contextMenuRef}
                     isToggled={menu.toggled}        // check if context menu is shown
                     positionY={menu.position.y}     // set top position of context menu
                     positionX={menu.position.x}     // set left position of context menu
                     remove={removeShimeji}          // pass current removeShimeji function to be invoked by pressing remove button in context menu
                     duplicate={duplicateShimeji}    // pass current duplicateShimeji function to be invoked by pressing duplicate button in context menu
-                /> */}
+                />
             </div>
         </Draggable>
     );

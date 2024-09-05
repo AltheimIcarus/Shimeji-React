@@ -25,22 +25,29 @@ const ShimejiFrame = ({
     const FRAME_COUNT = ACTIONS_SOURCES[actionName].length; // trivial, no need of useMemo or useCached here
 
     // loop over each frame at one second interval
-    const loopFrame = async () => {
+    const nextFrame = async () => {
         if (!play) return;
-        await sleep(constants.TIME_SECOND_IN_MS);
         setFrame( (currFrameRef.current + 1) % FRAME_COUNT);
-        loopFrame();
+        await sleep(constants.FPS_INTERVAL_FALLING);
     }
     
-    const handlePlay = useCallback(() => {
-        if (play && currentAction === actionID) {
-            loopFrame();
+    const handlePlay = useCallback(async () => {
+        if (play && currentAction === actionID && FRAME_COUNT > 1) {
+            let startTime = Date.now();
+            while (play && currentAction === actionID) {
+                if (Date.now() - startTime >= constants.TIME_SECOND_IN_MS) {
+                    startTime = Date.now();
+                    await nextFrame();
+                }
+            }
         }
     }, [play, currentAction]);
 
     // play animation with timeout to change to next frame
     // useEffect(() => {
-    //     return () => handlePlay;
+    //     return () => {
+    //         handlePlay();
+    //     };
     // }, [play, currentAction]);
 
     useEffect(() => {
@@ -49,7 +56,7 @@ const ShimejiFrame = ({
                 setFrame(0);
             };
         }
-        return;
+        return () => {};
     }, [reset]);
 
     return (
@@ -61,7 +68,7 @@ const ShimejiFrame = ({
             {ACTIONS_SOURCES[actionName].map((frame, index) => (
                 <img
                     src={frame}
-                    style={{opacity: index===currFrame? "1":"0"}}
+                    style={{opacity: (index===currFrame && currentAction===actionID)? "1":"0"}}
                     className='shimeji-frame'
                     key={index}
                     alt={`shimeji-frame-${actionName}-${index}`}
