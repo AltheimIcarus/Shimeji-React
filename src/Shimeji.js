@@ -5,6 +5,7 @@ import ContextMenu from './components/ContextMenu';
 import './Shimeji.css';
 import ShimejiFrame from './components/ShimejiFrame';
 import * as constants from './config.js';
+import { ACTIONS_SOURCES } from './components/ShimejiSources';
 
 // generate a new time out for shimeji action
 const generateTimeOutDuration = () => {
@@ -60,14 +61,6 @@ const Shimeji = ({
     const [actionTimeout, setActionTimeout, actionTimeoutRef] = useState(null);
     // set if animation is paused (false) or played (true)
     const [play, setPlay, playRef] = useState(false);
-    // set if animation is restarted from first frame
-    const [restart, setRestart, restartRef] = useState(true);
-    // variable to calculate time elapsed since beginning of any action animation, handles pause and resume play animation
-    const [endTime, setEndTime, endTimeRef] = useState(Date.now());
-    // variable to calculate time elapsed since beginning of pause, handles pause and resume play animation
-    const [pauseStartTime, setPauseStartTime, pauseStartTimeRef] = useState(Date.now());
-    // track the actionID before user firing a drag event to resume the same action animation on drag end
-    const [actionIDBeforeDrag, setActionIDBeforeDrag, actionIDBeforeDragRef] = useState(constants.ACTIONS.walking);
     // track if shimeji is being dragged
     const [isDragged, setIsDragged, isDraggedRef] = useState(false);
     // track shimeji move direction for walking or climbing actions, see config for list of available options
@@ -77,6 +70,9 @@ const Shimeji = ({
 
     // track sequence of actions so that last action animation can be successfully terminated from infinite loop
     const [sequence, setSequence, sequenceRef] = useState(0);
+
+    // track current frame of animation for child ShimejiFrame component
+    const [frame, setFrame, frameRef] = useState(0);
 
     
     // right click menu state
@@ -151,7 +147,7 @@ const Shimeji = ({
 
     // handle falling animation
     const fall = async () => {
-        if (shouldFall(positionRef.current.x, positionRef.current.y, window?.innerWidth, window?.innerHeight) && !isDraggedRef.current) {
+        while (shouldFall(positionRef.current.x, positionRef.current.y, window?.innerWidth, window?.innerHeight) && !isDraggedRef.current) {
             let currY = positionRef.current.y + constants.GRAVITY_PIXEL;
             
             if ( (currY + constants.HEIGHT) > window?.innerHeight) {
@@ -162,32 +158,18 @@ const Shimeji = ({
                 x: positionRef.current.x,
                 y: currY,
             });
-            fall();
-        } else {
+        }
+        if (!shouldFall(positionRef.current.x, positionRef.current.y, window?.innerWidth, window?.innerHeight)) {
             await land();
-            resume();
-            return;
+            if (!playRef.current) {
+                setPlay(false);
+                nextAction();
+            }
         }
         return;
     }
 
-    // resume to action animation prior to dragging
-    const resume = () => {
-        // actionID prior to dragging animation frame to resume animation
-        if (!playRef.current) {
-            const elapsedPauseTime = Date.now() - pauseStartTimeRef.current;
-            const remainTime = Math.abs(endTimeRef.current - Date.now()) + elapsedPauseTime;
-            setPauseStartTime(Date.now());
-            setActionTimeout(setTimeout(() => {
-                nextAction();
-            }, remainTime));
-            setAction(constants.ACTIONS.standing);
-            setActionIDBeforeDrag(null);
-            setPlay(true);
-        }
-    }
-
-    const animate = async () => {
+    const moveShimeji = async () => {
         if (!playRef.current || isDraggedRef.current) {
             //console.log('cancelled...');
             return;
@@ -288,7 +270,7 @@ const Shimeji = ({
         if (actionRef.current !== currAction) {
             setAction(currAction);
             // start animation from frame 1
-            setRestart(true);
+            setFrame(0);
         }
 
         // start animation for shimeji frame component
@@ -300,9 +282,6 @@ const Shimeji = ({
 
         // await rerender
         await sleep(constants.TIME_SECOND_IN_MS);
-        
-        // record start time for new action
-        setEndTime(Date.now() + newTimeout);
         
         // if walking or climbing, set move direction
         if (currAction === constants.ACTIONS.walking || currAction === constants.ACTIONS.climbing) {
@@ -316,10 +295,23 @@ const Shimeji = ({
                 if (currTime-startTime >= constants.TIME_SECOND_IN_MS) {
                     startTime = Date.now();
                     alignShimeji();
-                    await animate();
+                    await moveShimeji();
+                    await nextFrame();
                 }
             }
             return;
+        } else {
+            let startTime = Date.now();
+            // align Shimeji to face the moving direction
+            while (playRef.current && !isDraggedRef.current && sequenceRef.current === currSequence) {
+                if (Date.now() - startTime >= constants.TIME_SECOND_IN_MS) {
+                    startTime = Date.now();
+                    alignShimeji();
+                    await nextFrame();
+                    continue;
+                }
+                await sleep(constants.FPS_INTERVAL_FALLING);
+            }
         }
         setMoveDirection(null);
     }
@@ -340,10 +332,6 @@ const Shimeji = ({
     }, []);
 
     useEffect(()=> {
-        //console.log('action ', action);
-        //console.log('isDragged ', isDragged);
-        //console.log('pos ', position);
-        //console.log('play ', play);
         fall();
         window.addEventListener('resize', handleWindowResize);
 
@@ -373,9 +361,7 @@ const Shimeji = ({
                 setActionTimeout(null);
             }
             setRotation('none');
-            setActionIDBeforeDrag(actionRef.current);
             setIsDragged(true);
-            setPauseStartTime(Date.now());
             setAction(constants.ACTIONS.dragging);
         }
     };
@@ -390,6 +376,11 @@ const Shimeji = ({
             x = e.clientX;
             y = e.clientY;
         }
+        if (x < 0) x = 0;
+        if (x + constants.WIDTH > window?.innerWidth) x = window?.innerWidth - constants.WIDTH;
+        if (y < 0) y = 0;
+        if (y + constants.HEIGHT > window?.innerHeight) x = window?.innerHeight - constants.HEIGHT;
+        
         setPosition({
             ...position,
             x: x,
@@ -452,6 +443,20 @@ const Shimeji = ({
         }
     };
 
+    // loop over each frame
+    const nextFrame = async () => {
+        if (!playRef.current) return;
+        const actionName = Object.keys(constants.ACTIONS)[actionRef.current];
+        //const actionID = actionRef.current;
+        const frameCount = ACTIONS_SOURCES[actionName].length;
+        if (frameCount > 1) {
+            setFrame( (frameRef.current + 1) % frameCount);
+        } else {
+            setFrame(0);
+        }
+        await sleep(constants.FPS_INTERVAL_FALLING);
+    }
+
     // render shimeji on screen on topmost of <body>
     return (
         <Draggable
@@ -459,7 +464,7 @@ const Shimeji = ({
             onStart={handleDragStart}
             onDrag={handleDrag}
             onStop={handleDragEnd}
-            bounds={"Body"}
+            bounds={"body"}
             scale={1}
             ref={shimejiRef}
         >
@@ -478,14 +483,13 @@ const Shimeji = ({
 
                 {Object.keys(constants.ACTIONS).map((actionName, index) => (
                     <ShimejiFrame
-                        play={play}
                         style={{visibility: index===action? 'visible':'hidden', opacity: index===action? 1:0}}
-                        reset={restart}
                         key={index}
                         actionName={actionName}
                         actionID={index}
                         currentAction={action}
                         rotation={rotation}
+                        currFrame={frame}
                     />
                 ))}
 
