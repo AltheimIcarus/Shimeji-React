@@ -9,7 +9,7 @@ const ContextMenu = ({
     positionY,
     positionX,
     remove,
-    duplicate,
+    // duplicate,
 }) => {
 
     const handleRemove = (e) => {
@@ -17,10 +17,10 @@ const ContextMenu = ({
         remove();
     }
 
-    const handleDuplicate = (e) => {
-        e.stopPropagation();
-        duplicate();
-    }
+    // const handleDuplicate = (e) => {
+    //     e.stopPropagation();
+    //     duplicate();
+    // }
 
     return (
         <div
@@ -39,13 +39,13 @@ const ContextMenu = ({
                 <span>Remove</span>
             </button>
 
-            <button
+            {/* <button
                 onClick={handleDuplicate}
                 key={1}
                 className='shimeji-menu-btn'
             >
                 <span>Duplicate</span>
-            </button>
+            </button> */}
         </div>
     );
 

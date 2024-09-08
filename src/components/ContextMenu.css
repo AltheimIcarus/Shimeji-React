@@ -7,7 +7,7 @@ div.shimeji-menu.active {
     background-color: rgb(173, 173, 173);
     border-radius: 3px;
     padding: 3px;
-    z-index: 2;
+    z-index: 4;
 }
 
 div.shimeji-menu.inactive {
@@ -25,6 +25,7 @@ button.shimeji-menu-btn {
     cursor: pointer;
     color: black;
     margin: 1px 0;
+    z-index: 5;
 }
 
 button.shimeji-menu-btn:hover {

@@ -47,7 +47,7 @@ const shouldFall = (x, y, max_x, max_y) => {
 const Shimeji = ({
     id,             // id of current shimeji instance
     remove,         // parent's function for removing a shimeji with id
-    duplicate,      // parent's function for duplication a shimeji with id
+    // duplicate,      // parent's function for duplication a shimeji with id
 }) => {
     const shimejiRef = useRef(null);
     const [position, setPosition, positionRef] = useState({
@@ -347,9 +347,9 @@ const Shimeji = ({
     };
 
     // duplicate shimeji with parent's function
-    const duplicateShimeji = () => {
-        duplicate(id); // pass reference id back to main app
-    };
+    // const duplicateShimeji = () => {
+    //     duplicate(id); // pass reference id back to main app
+    // };
 
     // handle drag start shimeji event
     const handleDragStart = (e, data) => {
@@ -368,6 +368,7 @@ const Shimeji = ({
 
     // handle dragging shimeji event
     const handleDrag = async (e, data) => {
+        e.preventDefault();
         let x = null, y = null;
         if (e.touches) {
             x = e.touches[0].clientX;
@@ -476,7 +477,8 @@ const Shimeji = ({
                     left: 0,
                     top: 0,
                     visibility: showShimeji? 'visible':'hidden',
-                    opacity: showShimeji? '1':'0'
+                    opacity: showShimeji? '1':'0',
+                    zIndex: 3
                 }}
                 onContextMenu={(e) => handleRightClick(e)}    // invoke right click context menu
             >
@@ -499,7 +501,7 @@ const Shimeji = ({
                     positionY={menu.position.y}     // set top position of context menu
                     positionX={menu.position.x}     // set left position of context menu
                     remove={removeShimeji}          // pass current removeShimeji function to be invoked by pressing remove button in context menu
-                    duplicate={duplicateShimeji}    // pass current duplicateShimeji function to be invoked by pressing duplicate button in context menu
+                    // duplicate={duplicateShimeji}    // pass current duplicateShimeji function to be invoked by pressing duplicate button in context menu
                 />
             </div>
         </Draggable>

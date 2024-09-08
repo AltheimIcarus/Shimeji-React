@@ -9,16 +9,16 @@ function App() {
   };
 
   // main function to duplicate a Shimeji at top level
-  const duplicateShimeji = (id) => {
-    console.log('dup:', id);
-  };
+  // const duplicateShimeji = (id) => {
+  //   console.log('dup:', id);
+  // };
 
   return (
     <div className="App">
       <Shimeji
         id={1}
         remove={removeShimeji}
-        duplicate={duplicateShimeji}
+        // duplicate={duplicateShimeji}
       />
     </div>
   );
