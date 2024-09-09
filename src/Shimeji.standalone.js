@@ -99,21 +99,21 @@ const ACTIONS_SOURCES = {
 // UTILITY FUNCTIONS
 // generate a new time out for shimeji action
 const generateTimeOutDuration = () => {
-    return Math.floor( Math.random() * (constants.MAX_DURATION_MS - constants.MIN_DURATION_MS + 1) ) + constants.MIN_DURATION_MS;
+    return Math.floor( Math.random() * (MAX_DURATION_MS - MIN_DURATION_MS + 1) ) + MIN_DURATION_MS;
 }
 
 // generate a random shimeji action id
 const generateActionID = (id=0) => {
-    let result = Math.floor( Math.random() * (constants.MAX_ACTION_ID - constants.MIN_ACTION_ID + 1) ) + constants.MIN_ACTION_ID;
+    let result = Math.floor( Math.random() * (MAX_ACTION_ID - MIN_ACTION_ID + 1) ) + MIN_ACTION_ID;
     while (result === id) {
-        result = Math.floor( Math.random() * (constants.MAX_ACTION_ID - constants.MIN_ACTION_ID + 1) ) + constants.MIN_ACTION_ID;
+        result = Math.floor( Math.random() * (MAX_ACTION_ID - MIN_ACTION_ID + 1) ) + MIN_ACTION_ID;
     }
     return result;
 }
 
 // generate move direction
 const generateMoveDirection = (previousDirection=null) => {
-    if (!previousDirection) return (Math.random()>0.5)? constants.MOVE_PIXEL_NEG : constants.MOVE_PIXEL_POS;
+    if (!previousDirection) return (Math.random()>0.5)? MOVE_PIXEL_NEG : MOVE_PIXEL_POS;
     // 0.8 probability of returning previous direction
     const probabilities = [previousDirection, previousDirection, previousDirection, previousDirection, (-1)*previousDirection];
     return probabilities[ Math.floor(Math.random() * probabilities.length) ];
@@ -127,9 +127,9 @@ const sleep = async (timeMs) => {
 // function to determine if shimeji should fall from sky
 const shouldFall = (x, y, max_x, max_y) => {
     // not on left or right wall
-    if ( (x > 0) && (x + constants.WIDTH < max_x) ) {
+    if ( (x > 0) && (x + WIDTH < max_x) ) {
         // not on ground
-        return (y > 0) && (y + constants.HEIGHT < max_y);
+        return (y > 0) && (y + HEIGHT < max_y);
     }
     return false;
 }
@@ -170,13 +170,8 @@ class ContextMenu {
      * @param {{ position: { x: number; y: number; }; toggled: boolean; }} val
      */
     setMenu = (val) => {
-        this.#position = {
-            ...this.#position,
-            x: val.position.x,
-            y: val.position.y,
-        };
-        this.dom.style.top =  `${this.#position.y + 2}px`;
-        this.dom.style.left = `${this.#position.x + 2}px`;
+        this.dom.style.top =  `${0 + 2}px`;
+        this.dom.style.left = `${0 + 2}px`;
         this.#isToggled = val.toggled;
         this.toggle();
     }
@@ -326,8 +321,6 @@ class Shimeji {
         x: 1100,
         y: 10,
     };
-    // control show/hide Shimeji
-    #showShimeji = true; // <- change to remove dom element
     // track action type
     #action = ACTIONS.standing;
     // track action animation timeout
@@ -342,14 +335,14 @@ class Shimeji {
     #rotation = null;
     // track sequence of actions so that last action animation can be successfully terminated from infinite loop
     #sequence = 0;
-    // track current frame of animation for child ShimejiFrame component
-    #frame = 0;
-
     // right click menu
     contextMenu = null;
 
     // shimeji actions
     actions = [];
+
+    // food
+    foods = [];
     
     // right click menu state
     #menu = {
@@ -369,12 +362,7 @@ class Shimeji {
             x: val.x,
             y: val.y,
         };
-    }
-    /**
-     * @param {boolean} val
-     */
-    setShowShimeji = (val) => {
-        this.#showShimeji = val;
+        this.dom.style.transform = `translate(${this.#position.x}px, ${this.#position.y}px)`;
     }
     /**
      * @param {number} val
@@ -388,7 +376,14 @@ class Shimeji {
      * @param {number} val
      */
     setActionTimeout = (val) => {
-        this.#actionTimeout = val;
+        if (val===null) {
+            this.#actionTimeout = null;
+            return;
+        }
+        this.#actionTimeout = setTimeout(() => {
+            console.log(val);
+            this.nextAction();
+        }, val);
     }
     /**
      * @param {boolean} val
@@ -413,6 +408,9 @@ class Shimeji {
      */
     setRotation = (val) => {
         this.#rotation = val;
+        this.actions.forEach((action) => {
+            action.align(val);
+        });
     }
     /**
      * @param {number} val
@@ -420,22 +418,21 @@ class Shimeji {
     setSequence = (val) => {
         this.#sequence = val;
     }
-    /**
-     * @param {number} val
-     */
-    setFrame = (val) => {
-        this.#frame = val;
-    }
     
 
     // handle right click to open menu
     handleRightClick = (e) => {
         e.preventDefault();
+        this.setPlay(false);
+        console.log(window?.innerWidth, window?.innerHeight);
+        console.log(e.clientX, e.clientY);
         // get reference to context menu DOM
         const contextMenuAttr = this.contextMenu.dom.getBoundingClientRect();
         
         // check if cursor is at left of menu when clicked
         const isLeft = e.clientX < window?.innerWidth / 2;
+
+        const isTop = e.clientY > contextMenuAttr.y + contextMenuAttr.height / 2;
 
         let x = e.clientX;
         let y = e.clientY;
@@ -443,6 +440,11 @@ class Shimeji {
         if (!isLeft) {
             x = e.clientX - contextMenuAttr.width;
         }
+        if (isTop) {
+            y = e.clientY - contextMenuAttr.height;
+        }
+
+        console.log(x, y);
 
         this.contextMenu.setMenu({
             position: {
@@ -467,6 +469,8 @@ class Shimeji {
                     },
                     toggled: false,
                 });
+
+                this.setPlay(true);
             }
         }
     };
@@ -474,6 +478,7 @@ class Shimeji {
     // remove current Shimeji from document
     removeShimeji = () => {
         document.removeEventListener('click', this.handleCloseMenu);
+        window.removeEventListener('resize', this.handleWindowResize);
         let clone = this.dom.cloneNode(true);
         // remove all event listener on shimeji and child components
         this.dom.parentNode.replaceChild(clone, this.dom);
@@ -489,9 +494,282 @@ class Shimeji {
         return new Shimeji();
     }
 
-    fall = () => {
+    // align Shimeji to appropriate rotation to face the direction it is currently moving to
+    alignShimeji = () => {
+        switch (this.#action) {
+            case ACTIONS.walking: {
+                if (this.#position.y === 0) {
+                    if (this.#moveDirection > 0) {
+                        this.setRotation('scale(-1, -1)');
+                        return;
+                    }
+                    this.setRotation('scaleY(-1)');
+                    return;
+                }
+                if (this.#position.y > 0 && this.#moveDirection > 0) {
+                    this.setRotation('scaleX(-1)');
+                    return;
+                }
+                this.setRotation('none');
+                return;
+            }
+            case ACTIONS.climbing: {
+                if (this.#position.x + WIDTH >= window?.innerWidth) {
+                    if (this.#moveDirection > 0) {
+                        this.setRotation('scale(-1, -1)');
+                        return;
+                    }
+                    this.setRotation('scaleX(-1)');
+                    return;
+                }
+                if (this.#position.x === 0 && this.#moveDirection > 0) {
+                    this.setRotation('scaleY(-1)');
+                    return;
+                }
+                this.setRotation('none');
+                return;
+            }
+            default: {
+                // no other action is permitted when not on the ground except climbing & walking
+                this.setRotation('none');
+                return;
+            }
+        }
+    }
+
+    // move Shimeji in up down left right direction by fixed number of pixel
+    moveShimeji = () => {
+        if (!this.#play || this.#isDragged) {
+            //console.log('cancelled...');
+            return;
+        }
+        //console.log('animate... ', actionRef.current);
+        let newPosition = this.#moveDirection;
+
+        if(this.#action === ACTIONS.walking) {
+            newPosition += this.#position.x;
+            // if not hitting wall
+            if (newPosition > 0 && newPosition + WIDTH < window?.innerWidth) {
+                //console.log('moving... ', this.#position.x, ' -> ', newPosition);
+                this.setPosition({
+                    x: newPosition,
+                    y: this.#position.y,
+                });
+                return;
+            }
+            //console.log('hit wall... ', newPosition);
+            
+            // if 0 = hit left wall else right wall
+            newPosition = (newPosition <= 0)? 0 : window?.innerWidth - WIDTH;
+            this.setPosition({
+                x: newPosition,
+                y: this.#position.y,
+            });
+            
+            // change action to climbing
+            this.setAction(ACTIONS.climbing);
+
+            // move downward if in the sky, else move upward if on the ground
+            this.setMoveDirection((this.#position.y === 0)? MOVE_PIXEL_POS : MOVE_PIXEL_NEG);
+            return;
+        } else if (this.#action === ACTIONS.climbing) {
+            //console.log('climbing... ');
+            newPosition += this.#position.y;
+            // if not hitting ground or sky
+            if (newPosition > 0 && newPosition + HEIGHT < window?.innerHeight) {
+                //console.log('moving... ', this.#position.x, ' -> ', newPosition);
+                this.setPosition({
+                    x: this.#position.x,
+                    y: newPosition,
+                });
+                return;
+            }
+            
+            // if 0 = hit sky else ground
+            newPosition = (newPosition <= 0)? 0 : window?.innerHeight - HEIGHT;
+            //console.log('hit sky/gnd... ', newPosition);
+            this.setPosition({
+                x: this.#position.x,
+                y: newPosition,
+            });
+            
+            // change action to walking
+            this.setAction(ACTIONS.walking);
+            
+            // move rightward if on left wall, else move leftward if on right wall
+            this.setMoveDirection((this.#position.x === 0)? MOVE_PIXEL_POS : MOVE_PIXEL_NEG);
+            return;
+        }
+    }
+
+    /**
+     * loop through each frame at an FPS interval
+     * @param {Date.now} startTime
+     */
+    animate = async (startTime, currSequence, isMoving=false) => {
+        // request another frame
+        await sleep(FPS_INTERVAL_FALLING);
+        requestAnimationFrame(this.animate(Date.now(), currSequence));
+        
+        const continueAnimation = this.#play && this.#moveDirection!==null && !this.#isDragged && this.#sequence === currSequence;
+
+        if (Date.now() - startTime >= TIME_SECOND_IN_MS && continueAnimation) {
+            startTime = Date.now();
+            this.alignShimeji();    // align before movement
+            this.actions[this.#action].nextFrame();
+            if (isMoving) {
+                this.moveShimeji();
+                this.alignShimeji();// align after movement
+            }
+        }
+        return;
+    }
+
+    nextAction = async () => {
+        const newTimeout = generateTimeOutDuration();
+        // clear previous timeout
+        clearTimeout(this.#actionTimeout);
+        
+        // stop current animation
+        this.setPlay(false);
+        
+        // set new duration for next action
+        this.setActionTimeout(newTimeout);
+        
+        // set action animation
+        let currAction = generateActionID(this.#action);
+        if (this.#position.y + HEIGHT < window?.innerHeight) {
+            if (this.#position.x === 0 || this.#position.x + WIDTH === window?.innerWidth) {
+                currAction = ACTIONS.climbing;
+            } else {
+                currAction = ACTIONS.walking;
+            }
+        }
+        if (this.#action !== currAction) {
+            this.setAction(currAction);
+        }
+
+        // start animation for shimeji frame component
+        this.setPlay(true);
+        
+        // set new action sequence to terminate last animation
+        const currSequence = this.#sequence + 1;
+        this.setSequence(currSequence);
+        
+        // if walking or climbing, set move direction
+        if (currAction === ACTIONS.walking || currAction === ACTIONS.climbing) {
+            this.setMoveDirection(generateMoveDirection(this.#moveDirection));
+        } else {
+            this.setMoveDirection(null);
+        }
+        let startTime = Date.now();
+        while (this.#play && !this.#isDragged && this.#sequence === currSequence) {
+            if (Date.now() - startTime >= TIME_SECOND_IN_MS) {
+                startTime = Date.now();
+                this.alignShimeji();    // align before movement
+                this.actions[this.#action].nextFrame();
+                if (this.#moveDirection !== null) {
+                    this.moveShimeji();
+                    this.alignShimeji();// align after movement
+                }
+                continue;
+            }
+            await sleep(FPS_INTERVAL_FALLING);
+        }
+        return;
+    }
+
+    land = async () => {
+        await sleep(FPS_INTERVAL_FALLING * 2);
+        this.setAction(ACTIONS.landing);
+        await sleep(FPS_INTERVAL_FALLING * 5);
+    }
+
+    fall = async () => {
+        this.setPlay(false);
         this.setAction(ACTIONS.falling);
-    } 
+        while (shouldFall(this.#position.x, this.#position.y, window?.innerWidth, window?.innerHeight) && !this.#isDragged) {
+            let currY = this.#position.y + GRAVITY_PIXEL;
+            
+            if ( (currY + HEIGHT) > window?.innerHeight) {
+                currY = window?.innerHeight - HEIGHT;
+            }
+            await sleep(FPS_INTERVAL_FALLING);
+            this.setPosition({
+                x: this.#position.x,
+                y: currY,
+            });
+        }
+        if (!shouldFall(this.#position.x, this.#position.y, window?.innerWidth, window?.innerHeight)) {
+            await this.land();
+            if (!this.#play) {
+                this.setPlay(false);
+                await this.nextAction();
+            }
+        }
+    }
+
+    handleWindowResize = (e) => {
+        let x = this.#position.x;
+        if (x + WIDTH > e.currentTarget.innerWidth)
+            x = e.currentTarget.innerWidth - WIDTH;
+        let y = e.currentTarget.innerHeight - HEIGHT;
+        this.setPosition({
+            x: x,
+            y: y,
+        });
+    }
+
+    // handle dragging shimeji event
+    handleDrag = (e) => {
+        e.preventDefault();
+        let x = e.x;
+        let y = e.y;
+        if (x < 0) x = 0;
+        if (x + WIDTH > window?.innerWidth) x = window?.innerWidth - WIDTH;
+        if (y < 0) y = 0;
+        if (y + HEIGHT > window?.innerHeight) y = window?.innerHeight - HEIGHT;
+        
+        this.setPosition({
+            x: x,
+            y: y,
+        });
+    }
+
+    handleDragEnd = (e) => {
+        window.removeEventListener('mousemove', this.handleDrag);
+        console.log('dragend ', e);
+        // this.setPosition({
+        //     x: e.clientX,
+        //     y: e.clientY,
+        // });
+        this.setIsDragged(false);
+        this.fall();
+        window.removeEventListener('mouseup', this.handleDragEnd);
+    }
+
+    // handle drag start shimeji event
+    handleDragStart = (e) => {
+        if (e.button===2) {
+            return;
+        }
+        e.stopPropagation();
+        if (this.#play && !this.#isDragged && e.button===0) {
+            this.setPlay(false);
+            if (this.#actionTimeout) {
+                clearTimeout(this.#actionTimeout);
+                this.setActionTimeout(null);
+            }
+            this.setRotation('none');
+            this.setIsDragged(true);
+            this.setAction(ACTIONS.dragging);
+            
+            window.addEventListener('mousemove', this.handleDrag);
+            window.addEventListener('mouseup', this.handleDragEnd);
+        }
+        return;
+    };
+
 
     constructor() {
         this.spawnShimeji();
@@ -510,6 +788,7 @@ class Shimeji {
         this.dom.style.height = `${HEIGHT}px`;
         // this.dom.style.top = `${this.#position.y}px`;
         // this.dom.style.left = `${this.#position.x}px`;
+        this.dom.style.transform = `translate(${this.#position.x}px, ${this.#position.y}px)`;
 
         this.contextMenu = new ContextMenu(this.id, this.removeShimeji, this.duplicateShimeji);
         this.dom.appendChild(this.contextMenu.dom);
@@ -524,7 +803,11 @@ class Shimeji {
         // apply settings and append Shimeji to document
         document.body.appendChild(this.dom);
 
+        // drag event handler
+        this.dom.onmousedown = this.handleDragStart;
         this.dom.oncontextmenu = this.handleRightClick;
+
         document.onclick = this.handleCloseMenu;
+        window.addEventListener('resize', this.handleWindowResize);
     }
 };

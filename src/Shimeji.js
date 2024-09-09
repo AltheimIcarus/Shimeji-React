@@ -369,7 +369,8 @@ const Shimeji = ({
     // handle dragging shimeji event
     const handleDrag = async (e, data) => {
         e.preventDefault();
-        let x = null, y = null;
+        let x = null;
+        let y = null;
         if (e.touches) {
             x = e.touches[0].clientX;
             y = e.touches[0].clientY;
@@ -380,7 +381,7 @@ const Shimeji = ({
         if (x < 0) x = 0;
         if (x + constants.WIDTH > window?.innerWidth) x = window?.innerWidth - constants.WIDTH;
         if (y < 0) y = 0;
-        if (y + constants.HEIGHT > window?.innerHeight) x = window?.innerHeight - constants.HEIGHT;
+        if (y + constants.HEIGHT > window?.innerHeight) y = window?.innerHeight - constants.HEIGHT;
         
         setPosition({
             ...position,

@@ -3,6 +3,8 @@ div.shimeji-container {
     left:0;
     top:0;
     z-index:100;
+    cursor: move;
+    filter: drop-shadow(0 5mm 4mm rgba(0, 0, 0, 0.637));
 }
 
 div.shimeji-frame-container {
@@ -12,7 +14,7 @@ div.shimeji-frame-container {
     position: absolute;
     left: 0;
     top: 0;
-    transition-timing-function: ease-out;
+    /* transition-timing-function: ease-out; */
     z-index: 90;
 }
 
