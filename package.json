@@ -1,6 +1,11 @@
 {
   "name": "shimeji-app",
-  "version": "0.1.0",
+  "version": "1.0.0",
+  "description": "A digital pet that roams freely in a webpage similar to that of Shimeji coded in Java, but this time in React.js.",
+  "main": "index.js",
+  "module": "dist/index.es.js",
+  "author": "AltheimIcarus",
+  "license": "MIT",
   "private": true,
   "dependencies": {
     "@testing-library/jest-dom": "^5.17.0",
