@@ -138,7 +138,7 @@ const shouldFall = (x, y, max_x=document.documentElement.clientWidth, max_y=docu
     // not on left or right wall
     if ( (x > 0) && (x + WIDTH < max_x) ) {
         // not on ground
-        return (y > 0) && (y + HEIGHT < max_y);
+        return (y > 0) && (y + HEIGHT < max_y + window?.scrollY);
     }
     return false;
 }
@@ -175,7 +175,7 @@ const shouldFallY = (ele, visibleElements=[]) => {
         return [false, null];
 
     let eleRect = ele.getBoundingClientRect();
-    if ( eleRect.bottom < document.documentElement.clientHeight ) {
+    if ( eleRect.bottom < document.documentElement.clientHeight + window?.scrollY) {
         // not on ground
         for(let i=0; i<visibleElements.length; ++i) {
             let rect = visibleElements[i].getBoundingClientRect();
@@ -370,7 +370,7 @@ class ContextMenu {
 
 };
 
-
+// Shimeji frame container for each action
 class ShimejiFrame {
     actionName = "";
     actionID = null;
@@ -454,6 +454,7 @@ class ShimejiFrame {
     }
 };
 
+// Shimeji feeding food
 class ShimejiFood {
     static count = 0;
     static get maxCount() { return MAX_FOOD_COUNT; }
@@ -513,11 +514,11 @@ class ShimejiFood {
                 let collideRect = collideElement.getBoundingClientRect();
                 if ( (currY + this.height) > collideRect.top )
                     currY = collideRect.top - this.height;
-                console.log('collide ', currY);
-                
-            } else if ( (currY + this.height) > document.documentElement.clientHeight) {
-                currY = document.documentElement.clientHeight - this.height;
-                console.log('nocollide ', currY);
+                //console.log('collide ', currY);
+
+            } else if ( (currY + this.height) > document.documentElement.clientHeight + window?.scrollY) {
+                currY = document.documentElement.clientHeight - this.height + window?.scrollY;
+                //console.log('nocollide ', currY);
                 visibleElements = [];
             }
 
@@ -563,6 +564,7 @@ class ShimejiFood {
     }
 };
 
+// Shimeji main object
 class Shimeji {
     static count = 0;
     id = null;
@@ -924,8 +926,8 @@ class Shimeji {
         while (shouldFall(this.#position.x, this.#position.y) && !this.#isDragged) {
             let currY = this.#position.y + GRAVITY_PIXEL;
             
-            if ( (currY + HEIGHT) > document.documentElement.clientHeight) {
-                currY = document.documentElement.clientHeight - HEIGHT;
+            if ( (currY + HEIGHT) > document.documentElement.clientHeight + window?.scrollY) {
+                currY = document.documentElement.clientHeight - HEIGHT + window?.scrollY;
             }
             await sleep(FPS_INTERVAL_FALLING);
             this.setPosition({
@@ -945,10 +947,10 @@ class Shimeji {
     handleWindowResize = (e) => {
         let x = this.#position.x;
         if (x + WIDTH > document.documentElement.clientWidth)
-            x = document.documentElement.clientHeight - WIDTH;
+            x = document.documentElement.clientWidth - WIDTH;
         if (x < 0)
             x = 0;
-        let y = document.documentElement.clientHeight - HEIGHT;
+        let y = document.documentElement.clientHeight - HEIGHT + window?.scrollY;
         this.setPosition({
             x: x,
             y: y,
@@ -961,7 +963,7 @@ class Shimeji {
                 foodX = 0;
             food.setPosition({
                 x: foodX,
-                y: document.documentElement.clientHeight - food.height,
+                y: document.documentElement.clientHeight - food.height + window?.scrollY,
             });
         });
     }
@@ -970,12 +972,12 @@ class Shimeji {
     handleDrag = (e) => {
         e.preventDefault();
         let x = e.x;
-        let y = e.y;
+        let y = e.y + window?.scrollY;
         if (x < 0) x = 0;
         if (x + WIDTH > document.documentElement.clientWidth) x = document.documentElement.clientWidth - WIDTH;
         if (y < 0) y = 0;
-        if (y + HEIGHT > document.documentElement.clientHeight) y = document.documentElement.clientHeight - HEIGHT;
-        
+        if (y + HEIGHT > document.documentElement.clientHeight + window?.scrollY) y = document.documentElement.clientHeight - HEIGHT + window?.scrollY;
+
         this.setPosition({
             x: x,
             y: y,
@@ -1079,5 +1081,10 @@ class Shimeji {
         window.addEventListener('resize', this.handleWindowResize);
         window.addEventListener('keyup', this.dropFood);
         window.addEventListener('mousemove', this.recordMousePosition);
+        window.addEventListener('scroll', (e) => {
+            window.requestAnimationFrame(() => {
+                this.handleWindowResize();
+            });
+        });
     }
 };
