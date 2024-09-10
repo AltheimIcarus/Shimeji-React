@@ -94,7 +94,7 @@ const Shimeji = ({
         const contextMenuAttr = contextMenuRef.current.getBoundingClientRect();
         
         // check if cursor is at left of menu when clicked
-        const isLeft = e.clientX < window?.innerWidth / 2;
+        const isLeft = e.clientX < document.documentElement.clientWidth / 2;
 
         let x = e.clientX;
         let y = e.clientY;
@@ -147,11 +147,11 @@ const Shimeji = ({
 
     // handle falling animation
     const fall = async () => {
-        while (shouldFall(positionRef.current.x, positionRef.current.y, window?.innerWidth, window?.innerHeight) && !isDraggedRef.current) {
+        while (shouldFall(positionRef.current.x, positionRef.current.y, document.documentElement.clientWidth, document.documentElement.clientHeight) && !isDraggedRef.current) {
             let currY = positionRef.current.y + constants.GRAVITY_PIXEL;
             
-            if ( (currY + constants.HEIGHT) > window?.innerHeight) {
-                currY = window?.innerHeight - constants.HEIGHT;
+            if ( (currY + constants.HEIGHT) > document.documentElement.clientHeight) {
+                currY = document.documentElement.clientHeight - constants.HEIGHT;
             }
             await sleep(constants.FPS_INTERVAL_FALLING);
             setPosition({
@@ -159,7 +159,7 @@ const Shimeji = ({
                 y: currY,
             });
         }
-        if (!shouldFall(positionRef.current.x, positionRef.current.y, window?.innerWidth, window?.innerHeight)) {
+        if (!shouldFall(positionRef.current.x, positionRef.current.y, document.documentElement.clientWidth, document.documentElement.clientHeight)) {
             await land();
             if (!playRef.current) {
                 setPlay(false);
@@ -180,7 +180,7 @@ const Shimeji = ({
         if(actionRef.current === constants.ACTIONS.walking) {
             newPosition += positionRef.current.x;
             // if not hitting wall
-            if (newPosition > 0 && newPosition + constants.WIDTH < window?.innerWidth) {
+            if (newPosition > 0 && newPosition + constants.WIDTH < document.documentElement.clientWidth) {
                 //console.log('moving... ', positionRef.current.x, ' -> ', newPosition);
                 setPosition({
                     ...position,
@@ -193,7 +193,7 @@ const Shimeji = ({
             //console.log('hit wall... ', newPosition);
             
             // if 0 = hit left wall else right wall
-            newPosition = (newPosition <= 0)? 0 : window?.innerWidth - constants.WIDTH;
+            newPosition = (newPosition <= 0)? 0 : document.documentElement.clientWidth - constants.WIDTH;
             setPosition({
                 ...position,
                 x: newPosition,
@@ -211,7 +211,7 @@ const Shimeji = ({
             //console.log('climbing... ');
             newPosition += positionRef.current.y;
             // if not hitting ground or sky
-            if (newPosition > 0 && newPosition + constants.HEIGHT < window?.innerHeight) {
+            if (newPosition > 0 && newPosition + constants.HEIGHT < document.documentElement.clientHeight) {
                 //console.log('moving... ', positionRef.current.x, ' -> ', newPosition);
                 setPosition({
                     ...position,
@@ -224,7 +224,7 @@ const Shimeji = ({
             }
             
             // if 0 = hit sky else ground
-            newPosition = (newPosition <= 0)? 0 : window?.innerHeight - constants.HEIGHT;
+            newPosition = (newPosition <= 0)? 0 : document.documentElement.clientHeight - constants.HEIGHT;
             //console.log('hit sky/gnd... ', newPosition);
             setPosition({
                 ...position,
@@ -260,8 +260,8 @@ const Shimeji = ({
         // set action animation
         let currAction = generateActionID(actionRef.current);
         //const currAction = actionRef.current;
-        if (positionRef.current.y + constants.HEIGHT < window?.innerHeight) {
-            if (positionRef.current.x === 0 || positionRef.current.x + constants.WIDTH === window?.innerWidth) {
+        if (positionRef.current.y + constants.HEIGHT < document.documentElement.clientHeight) {
+            if (positionRef.current.x === 0 || positionRef.current.x + constants.WIDTH === document.documentElement.clientWidth) {
                 currAction = constants.ACTIONS.climbing;
             } else {
                 currAction = constants.ACTIONS.walking;
@@ -379,9 +379,9 @@ const Shimeji = ({
             y = e.clientY;
         }
         if (x < 0) x = 0;
-        if (x + constants.WIDTH > window?.innerWidth) x = window?.innerWidth - constants.WIDTH;
+        if (x + constants.WIDTH > document.documentElement.clientWidth) x = document.documentElement.clientWidth - constants.WIDTH;
         if (y < 0) y = 0;
-        if (y + constants.HEIGHT > window?.innerHeight) y = window?.innerHeight - constants.HEIGHT;
+        if (y + constants.HEIGHT > document.documentElement.clientHeight) y = document.documentElement.clientHeight - constants.HEIGHT;
         
         setPosition({
             ...position,
@@ -422,7 +422,7 @@ const Shimeji = ({
                 return;
             }
             case constants.ACTIONS.climbing: {
-                if (positionRef.current.x + constants.WIDTH >= window?.innerWidth) {
+                if (positionRef.current.x + constants.WIDTH >= document.documentElement.clientWidth) {
                     if (moveDirectionRef.current > 0) {
                         setRotation('scale(-1, -1)');
                         return;
