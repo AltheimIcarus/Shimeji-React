@@ -1,5 +1,5 @@
 div.shimeji-container {
-    position:absolute;
+    position:fixed;
     left:0;
     top:0;
     z-index:100;
@@ -60,7 +60,7 @@ button.shimeji-menu-btn:hover {
 }
 
 div.shimeji-food {
-    position: absolute;
+    position: fixed;
     top: 0;
     left: 0;
     width: 16px;

@@ -34,14 +34,43 @@ const sleep = async (timeMs) => {
     await new Promise(r => setTimeout(r, timeMs));
 }
 
-// function to determine if shimeji should fall from sky
-const shouldFall = (x, y, max_x, max_y) => {
+/**
+ * function to determine if shimeji should fall from sky
+ * @param {number} x    x coordinate of Shimeji
+ * @param {number} y    y coordinate of Shimeji
+ * @param {number} max_x    viewport maximum width (right) excluding scrollbar
+ * @param {number} max_y    viewport maximum height (ground) excluding scrollbar
+ */
+const shouldFall = (x, y, max_x=window?.innerWidth, max_y=window?.innerHeight) => {
     // not on left or right wall
     if ( (x > 0) && (x + constants.WIDTH < max_x) ) {
         // not on ground
         return (y > 0) && (y + constants.HEIGHT < max_y);
     }
     return false;
+}
+
+/**
+ * function to calculate the width of window's scrollbar
+ * @returns {number} Window's scrollbar width in pixel
+ */
+const getScrollbarWidth = () => {
+    // Add temporary box to wrapper
+    let scrollbox = document.createElement('div');
+
+    // Make box scrollable
+    scrollbox.style.overflow = 'scroll';
+
+    // Append box to document
+    document.body.appendChild(scrollbox);
+
+    // Measure inner width of box
+    let scrollBarWidth = scrollbox.offsetWidth - scrollbox.clientWidth;
+
+    // Remove box
+    document.body.removeChild(scrollbox);
+
+    return (document.body.scrollHeight > document.body.clientHeight)? scrollBarWidth : 0;
 }
 
 const Shimeji = ({
@@ -51,7 +80,7 @@ const Shimeji = ({
 }) => {
     const shimejiRef = useRef(null);
     const [position, setPosition, positionRef] = useState({
-        x: 1100,
+        x: (window?.innerWidth / 5) * 3,
         y: 10,
     });
     const [showShimeji, setShowShimeji, showShimejiRef] = useState(true);
@@ -87,14 +116,61 @@ const Shimeji = ({
     // right click menu DOM reference
     const contextMenuRef = useRef(null);
 
+    // record window's scrollbar width
+    let scrollBarWidth = getScrollbarWidth(); 
+
+    // bound x coordinate in viewport
+    const boundX = (val) => {
+        if (val < 0) {
+            return 0;
+        }
+        if (val + constants.WIDTH > getMaxWidth()) {
+            return getMaxWidth() - constants.WIDTH;
+        }
+        return val;
+    };
+
+    // bound y coordinate in viewport
+    const boundY = (val) => {
+        if (val < 0) {
+            return 0;
+        }
+        if (val + constants.HEIGHT > getMaxHeight()) {
+            return getMaxHeight() - constants.HEIGHT;
+        }
+        return val;
+    };
+
+    // check is shimeji touching left/right wall
+    const onXBound = () => {
+        return positionRef.current.x === 0 || positionRef.current.x + constants.WIDTH === getMaxWidth();
+    }
+    // check is shimeji touching sky/ground
+    const onYBound = () => {
+        return positionRef.current.y === 0 || positionRef.current.y + constants.HEIGHT === getMaxHeight();
+    }
+    // check is shimeji touching sky only
+    const onSkyBound = () => {
+        return positionRef.current.y === 0;
+    }
+    // get max height boundary
+    const getMaxHeight = () => {
+        return window?.innerHeight - scrollBarWidth;
+    };
+    // get max width boundary
+    const getMaxWidth = () => {
+        return window?.innerWidth - scrollBarWidth;
+    };
+
     // handle right click to open menu
     const handleRightClick = (e) => {
         e.preventDefault();
+        setPlay(false);
         // get reference to context menu DOM
         const contextMenuAttr = contextMenuRef.current.getBoundingClientRect();
         
         // check if cursor is at left of menu when clicked
-        const isLeft = e.clientX < document.documentElement.clientWidth / 2;
+        const isLeft = e.clientX < getMaxWidth() / 2;
 
         let x = e.clientX;
         let y = e.clientY;
@@ -147,20 +223,26 @@ const Shimeji = ({
 
     // handle falling animation
     const fall = async () => {
-        while (shouldFall(positionRef.current.x, positionRef.current.y, document.documentElement.clientWidth, document.documentElement.clientHeight) && !isDraggedRef.current) {
-            let currY = positionRef.current.y + constants.GRAVITY_PIXEL;
+        setAction(constants.ACTIONS.falling);
+        while (shouldFall(positionRef.current.x, positionRef.current.y, getMaxWidth(), getMaxHeight()) && !isDraggedRef.current) {
+            let currY = boundY(positionRef.current.y + constants.GRAVITY_PIXEL);
             
-            if ( (currY + constants.HEIGHT) > document.documentElement.clientHeight) {
-                currY = document.documentElement.clientHeight - constants.HEIGHT;
-            }
             await sleep(constants.FPS_INTERVAL_FALLING);
             setPosition({
                 x: positionRef.current.x,
                 y: currY,
             });
         }
-        if (!shouldFall(positionRef.current.x, positionRef.current.y, document.documentElement.clientWidth, document.documentElement.clientHeight)) {
-            await land();
+        if (!shouldFall(positionRef.current.x, positionRef.current.y, getMaxWidth(), getMaxHeight())) {
+            if ( !onXBound() || !onSkyBound() ) {
+                await land();
+            }
+            if ( onXBound() )
+                setAction(constants.ACTIONS.climbing);
+            if ( onYBound() )
+                setAction(constants.ACTIONS.walking);
+            alignShimeji();
+
             if (!playRef.current) {
                 setPlay(false);
                 nextAction();
@@ -180,7 +262,7 @@ const Shimeji = ({
         if(actionRef.current === constants.ACTIONS.walking) {
             newPosition += positionRef.current.x;
             // if not hitting wall
-            if (newPosition > 0 && newPosition + constants.WIDTH < document.documentElement.clientWidth) {
+            if (newPosition > 0 && newPosition + constants.WIDTH < getMaxWidth()) {
                 //console.log('moving... ', positionRef.current.x, ' -> ', newPosition);
                 setPosition({
                     ...position,
@@ -193,7 +275,7 @@ const Shimeji = ({
             //console.log('hit wall... ', newPosition);
             
             // if 0 = hit left wall else right wall
-            newPosition = (newPosition <= 0)? 0 : document.documentElement.clientWidth - constants.WIDTH;
+            newPosition = boundX(newPosition);
             setPosition({
                 ...position,
                 x: newPosition,
@@ -211,20 +293,19 @@ const Shimeji = ({
             //console.log('climbing... ');
             newPosition += positionRef.current.y;
             // if not hitting ground or sky
-            if (newPosition > 0 && newPosition + constants.HEIGHT < document.documentElement.clientHeight) {
+            if (newPosition > 0 && newPosition + constants.HEIGHT < getMaxHeight()) {
                 //console.log('moving... ', positionRef.current.x, ' -> ', newPosition);
                 setPosition({
                     ...position,
                     x: positionRef.current.x,
                     y: newPosition,
                 });
-                alignShimeji();
                 await sleep(constants.FPS_INTERVAL_FALLING);
                 return;
             }
             
             // if 0 = hit sky else ground
-            newPosition = (newPosition <= 0)? 0 : document.documentElement.clientHeight - constants.HEIGHT;
+            newPosition = boundY(newPosition);
             //console.log('hit sky/gnd... ', newPosition);
             setPosition({
                 ...position,
@@ -237,7 +318,6 @@ const Shimeji = ({
             
             // move rightward if on left wall, else move leftward if on right wall
             setMoveDirection((positionRef.current.x === 0)? constants.MOVE_PIXEL_POS : constants.MOVE_PIXEL_NEG);
-            alignShimeji();
             await sleep(constants.FPS_INTERVAL_FALLING);
             return;
         }
@@ -260,8 +340,8 @@ const Shimeji = ({
         // set action animation
         let currAction = generateActionID(actionRef.current);
         //const currAction = actionRef.current;
-        if (positionRef.current.y + constants.HEIGHT < document.documentElement.clientHeight) {
-            if (positionRef.current.x === 0 || positionRef.current.x + constants.WIDTH === document.documentElement.clientWidth) {
+        if (positionRef.current.y + constants.HEIGHT < getMaxHeight()) {
+            if ( onXBound() ) {
                 currAction = constants.ACTIONS.climbing;
             } else {
                 currAction = constants.ACTIONS.walking;
@@ -287,38 +367,31 @@ const Shimeji = ({
         if (currAction === constants.ACTIONS.walking || currAction === constants.ACTIONS.climbing) {
             setMoveDirection(generateMoveDirection(moveDirectionRef.current));
             //setMoveDirection(moveDirectionRef.current);
-            let startTime = Date.now();
-            let currTime = null;
             // align Shimeji to face the moving direction
-            while (playRef.current && moveDirectionRef.current!==null && !isDraggedRef.current && sequenceRef.current === currSequence) {
-                currTime = Date.now();
-                if (currTime-startTime >= constants.TIME_SECOND_IN_MS) {
-                    startTime = Date.now();
-                    alignShimeji();
-                    await moveShimeji();
-                    await nextFrame();
-                }
-            }
-            return;
         } else {
-            let startTime = Date.now();
-            // align Shimeji to face the moving direction
-            while (playRef.current && !isDraggedRef.current && sequenceRef.current === currSequence) {
-                if (Date.now() - startTime >= constants.TIME_SECOND_IN_MS) {
-                    startTime = Date.now();
-                    alignShimeji();
-                    await nextFrame();
-                    continue;
-                }
-                await sleep(constants.FPS_INTERVAL_FALLING);
-            }
+            setMoveDirection(null);
         }
-        setMoveDirection(null);
+        let startTime = Date.now();
+        while (playRef.current && !isDraggedRef.current && sequenceRef.current === currSequence) {
+            if (Date.now() - startTime >= constants.TIME_SECOND_IN_MS) {
+                startTime = Date.now();
+                alignShimeji();
+                nextFrame();
+                if (moveDirectionRef.current !== null) {
+                    await moveShimeji();
+                    alignShimeji();
+                }
+                continue;
+            }
+            await sleep(constants.FPS_INTERVAL_FALLING);
+        }
+        return;
     }
 
     // move shimeji on windows resize
     const handleWindowResize = useCallback((e) => {
         if (shimejiRef.current) {
+            scrollBarWidth = getScrollbarWidth();
             let x = positionRef.current.x;
             if (shimejiRef.current.state.x + constants.WIDTH > e.currentTarget.innerWidth)
                 x = e.currentTarget.innerWidth - constants.WIDTH;
@@ -331,12 +404,23 @@ const Shimeji = ({
         }
     }, []);
 
+    // handle scrolling
+    const handleScrolling = useCallback((e) => {
+        // update position if necessary
+        this.setPosition({
+            x: boundX(positionRef.current.x),
+            y: boundY(positionRef.current.y),
+        });
+    }, []);
+
     useEffect(()=> {
         fall();
         window.addEventListener('resize', handleWindowResize);
+        window.addEventListener('scroll', handleScrolling);
 
         return () => {
             window.removeEventListener('resize', handleWindowResize);
+            window.removeEventListener('scroll', handleScrolling);
         };
     }, []);
     
@@ -378,13 +462,11 @@ const Shimeji = ({
             x = e.clientX;
             y = e.clientY;
         }
-        if (x < 0) x = 0;
-        if (x + constants.WIDTH > document.documentElement.clientWidth) x = document.documentElement.clientWidth - constants.WIDTH;
-        if (y < 0) y = 0;
-        if (y + constants.HEIGHT > document.documentElement.clientHeight) y = document.documentElement.clientHeight - constants.HEIGHT;
+        x = boundX(x);
+        y = boundY(y - 50);
         
         setPosition({
-            ...position,
+            ...positionRef.current,
             x: x,
             y: y,
         });
@@ -393,12 +475,11 @@ const Shimeji = ({
     // handle drag end shimeji event
     const handleDragEnd = async (e, data) => {
         setPosition({
-            ...position,
+            ...positionRef.current,
             x: data.x,
             y: data.y,
         });
         setIsDragged(false);
-        setAction(constants.ACTIONS.falling);
         fall();
     };
 
@@ -422,7 +503,7 @@ const Shimeji = ({
                 return;
             }
             case constants.ACTIONS.climbing: {
-                if (positionRef.current.x + constants.WIDTH >= document.documentElement.clientWidth) {
+                if (positionRef.current.x + constants.WIDTH >= getMaxWidth()) {
                     if (moveDirectionRef.current > 0) {
                         setRotation('scale(-1, -1)');
                         return;
@@ -446,7 +527,7 @@ const Shimeji = ({
     };
 
     // loop over each frame
-    const nextFrame = async () => {
+    const nextFrame = () => {
         if (!playRef.current) return;
         const actionName = Object.keys(constants.ACTIONS)[actionRef.current];
         //const actionID = actionRef.current;
@@ -456,7 +537,6 @@ const Shimeji = ({
         } else {
             setFrame(0);
         }
-        await sleep(constants.FPS_INTERVAL_FALLING);
     }
 
     // render shimeji on screen on topmost of <body>
