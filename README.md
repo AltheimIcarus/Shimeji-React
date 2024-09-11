@@ -1,25 +1,25 @@
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).\
-A spinoff idea from another repo Qwiki to create a java-like Shimeji (simple animated character) in React.js to interact with components on a webpage.\
+A spinoff idea from another repo Qwiki to create a java-like Shimeji (simple animated character) in React.js to interact with components on a webpage.
 
 ## Functionallities
-Currently it supports:\
-- [x] Falling animation due to gravity.
-- [x] Standing action animation.
-- [x] Walking, Climbing, Sleeping, and Dragging action animations.
-- [x] Random next action animation and duration.
-- [x] Play and pause when dragged.
-- [x] Draggable Shimeji using react-draggable within ```<body>```.
-- [x] Dragging Shimeji while it is falling.
-- [x] Adjustable gravity and animation frame rate.
-- [ ] Cloning Shimeji.
-- [x] Remove Shimeji.
-- [ ] Release drag on mouseout instead of having to click on screen. (issue with react-draggable when parent and child (img) are both absolute positioned.)
-- [ ] Batch import required Shimeji images into background-image of div instead of using img tag.
-- [ ] Interact or climb onto each DOM element.
-- [ ] Add pause action (Shimeji with light bulb on head) in between each action transition
-- [ ] More functionallities to come.
+| Feature | `React branch supports:               ` | `Standalone VanillaJS branch supports:` |
+| ------------- | ------------- | ------------- |
+| Falling animation due to gravity.                                        | ✔️ | ✔️ |
+| Dragging, Falling, and Landing action animations.                        | ✔️ | ✔️ |
+| Standing, Walking, Climbing, Sleeping, and Eating action animations.     | ✔️ | ✔️ |
+| Random next action animation and duration.                               | ✔️ | ✔️ |
+| Draggable Shimeji using react-draggable within ```<body>```.             | ✔️ | ✔️ |
+| Dragging Shimeji while it is falling.                                    | ✔️ | ❌ |
+| Adjustable gravity and animation frame rate.                             | ✔️ | ✔️ |
+| Cloning Shimeji.                                                         | ❌ | ✔️ |
+| Remove Shimeji.                                                          | ✔️ | ✔️ |
+| Release drag on mouseout instead of having to click on screen. (issue with react-draggable when parent and child (img) are both absolute positioned.) | ❌ | ❌ |
+| Batch import required Shimeji images into background-image of div instead of using img tag. | ❌ | ✔️ (Base64 Encoded) |
+| Interact or climb onto each DOM element.                                 | ❌ | ❌ |
+| Add pause action (Shimeji with light bulb on head) in between each action transition. | ❌ | ❌ |
+| Drop feeding foods and have Shimeji chase after and eat it.              | ❌ | ✔️ |
 
 Submit an issue to me for additional features.
 
