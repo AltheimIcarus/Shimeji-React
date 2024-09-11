@@ -1,10 +1,10 @@
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).\
-A spinoff idea from another repo Qwiki to create a java-like Shimeji (simple animated character) in React.js to interact with components on a webpage.
+A spinoff idea from another repo Qwiki to create a java-like Shimeji (simple animated character) in React.js and VanillaJS to interact with components on a webpage.
 
 ## Functionallities
-| Feature | `React branch supports:               ` | `Standalone VanillaJS branch supports:` |
+| Feature | `React (main) branch supports:` | `Standalone VanillaJS branch supports:` |
 | ------------- | ------------- | ------------- |
 | Falling animation due to gravity.                                        | ✔️ | ✔️ |
 | Dragging, Falling, and Landing action animations.                        | ✔️ | ✔️ |
@@ -25,13 +25,26 @@ Submit an issue to me for additional features.
 
 ## Available Scripts
 
+### React (main) branch
+
 In the project directory, you can run:
 
-### `npm start`
+#### `npm start`
 
 Runs the app in the development mode.\
 Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
 
-### `npm run build`
+#### `npm run build`
 
 Builds the app for production to the `build` folder.\
+
+### Standalone VanillaJS branch
+
+Download and include the `Shimeji.standalone.js` into your html code.
+
+```html
+<script type="text/javascript" src="shimeji-app/src/Shimeji.standalone.js"></script>
+<script type="text/javascript">
+    var shimejiA = new ShimejiController();
+</script>
+```
