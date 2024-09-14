@@ -434,6 +434,10 @@ class BoundedHTMLElement {
     onSkyBound = () => {
         return this.position.y === 0;
     }
+    onGroundBound = () => {
+        this.updateMaxHeight();
+        return this.bottom === this.maxHeight;
+    }
 
     /**
      * function to determine if shimeji should fall from sky
@@ -454,7 +458,7 @@ class BoundedHTMLElement {
      * function to determine if any ELEMENT should fall in y-axis regardless of x coordinate, will return false when element hits ground or rect of another div
      * @returns {[boolean, HTMLElement]} [boolean true if should fall, visible element to collide or null if none]
      */
-    shouldFallY = (visibleElements=[]) => {
+    shouldFallYCollide = (visibleElements=[]) => {
         this.updateMaxHeight();
         if ( !this.onYBound() ) {
             // not on ground
@@ -468,6 +472,14 @@ class BoundedHTMLElement {
             return [true, null];
         }
         return [false, null];
+    }
+
+    /**
+     * function to determine if any ELEMENT should fall in y-axis regardless of x coordinate
+     * @returns {boolean} true if should fall else false
+     */
+    shouldFallY = () => {
+        return !this.onGroundBound();
     }
 };
 
@@ -752,14 +764,14 @@ class ShimejiFood extends BoundedHTMLElement {
     }
 
     fall = async () => {
-        while ( this.shouldFall() ) {
+        while ( this.shouldFallY() ) {
             await sleep(FPS_INTERVAL_FALLING);
             this.setPosition({
                 x: this.position.x,
                 y: this.position.y + GRAVITY_PIXEL,
             });
         }
-        if ( !this.shouldFall() ) {
+        if ( !this.shouldFallY() ) {
             this.eaten = true;   // set food to be edible
             this.dom.setAttribute('eaten', 'true');
         }
@@ -1030,6 +1042,8 @@ class Shimeji extends BoundedHTMLElement {
         if (this.closestFoodDistance !== null && this.closestFoodDistance < dist) {
             return;
         }
+        if (this.isChasingFood && this.closestFoodDistance === dist)
+            return;
 
         // stop current animation
         this.setPlay(false);
@@ -1044,10 +1058,17 @@ class Shimeji extends BoundedHTMLElement {
         this.isChasingFood = true;
         
         // take shortcut from sky and wall to ground
-        if (this.onXBound() || this.onSkyBound()) {
+        if (this.onXBound()) {
             this.setPosition({
                 x: (this.position.x + MOVE_PIXEL_POS >= this.updateMaxWidth())? this.maxWidth - MOVE_PIXEL_POS : MOVE_PIXEL_POS,
                 y: this.position.y,
+            });
+            this.fall();
+        }
+        if (this.onSkyBound()) {
+            this.setPosition({
+                x: this.position.x,
+                y: this.position.y + 1,
             });
             this.fall();
         }
@@ -1075,6 +1096,13 @@ class Shimeji extends BoundedHTMLElement {
                 startTime = Date.now();
                 this.actions[this.#action].nextFrame();
                 if ( Math.abs(this.position.x + radius - food.x) < MOVE_PIXEL_POS) {
+                    break;
+                }
+                if ( this.position.x + this.#moveDirection <= 0 || this.right + this.#moveDirection >= this.updateMaxWidth() ) {
+                    this.setPosition({
+                        x: this.position.x + this.#moveDirection,
+                        y: this.position.y,
+                    });
                     break;
                 }
                 this.moveShimeji();
@@ -1445,10 +1473,10 @@ class Shimeji extends BoundedHTMLElement {
         // drag event handler
         if (this.draggable) {
             this.dom.onmousedown = this.handleDragStart;
-            this.dom.oncontextmenu = this.handleRightClick;
         }
-
+        
         if (this.showMenu) {
+            this.dom.oncontextmenu = this.handleRightClick;
             document.onclick = this.handleCloseMenu;
         }
 
@@ -1529,14 +1557,14 @@ class ShimejiController {
         shimejiOptions: {
             animate: true,
             draggable: true,
-            move: false,
-            chaseFood: false,
+            move: true,
+            chaseFood: true,
             duplicable: false,
             stayInWindow: true,
             showMenu: false,
         },
         foodOptions: {
-            dropFood: false,
+            dropFood: true,
             stayInWindow: true,
         },
         autoSpawnShimeji: false,
