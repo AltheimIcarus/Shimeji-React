@@ -1,5 +1,5 @@
 /**
- * v1.2.0
+ * v1.2.1
  * NEW FEATURES:
  * Added auto spawn new Shimeji with an interval (second) option
  * Added release as Tampermonkey and GreasyFork script
@@ -7,24 +7,26 @@
  * 
  * BUGS FIXED:
  * All shimeji display eating animation when one of it gets the food
- *      -> added canEat and ShimejiFood.id check in toClosestFood function of Shimeji to avoid multiple Shimeji eating the same food at a time
+ *      > added canEat and ShimejiFood.id check in toClosestFood function of Shimeji to avoid multiple Shimeji eating the same food at a time
  * All shimeji stopped animation after one of it gets the food
- *      -> added exit condition in Shimeji.toClosestFood function for Shimeji that missed the food
+ *      > added exit condition in Shimeji.toClosestFood function for Shimeji that missed the food
  * All food removed when one of the food is eaten
- *      -> added canEat and ShimejiFood.id check in toClosestFood function of Shimeji to avoid eating multiple foods at same time
+ *      > added canEat and ShimejiFood.id check in toClosestFood function of Shimeji to avoid eating multiple foods at same time
  * Shimeji movement speed towards closest food increases infinitely until sudden teleport
- *      -> fixed the frame rate of Shimeji to run at constant speed towards food
+ *      > fixed the frame rate of Shimeji to run at constant speed towards food
  * All Shemeji on left/right wall will fall from LEFT wall when food is dropped
- *      -> changed the x coordinate in setPosition when forcing Shimeji to jump off from wall to chase food
+ *      > changed the x coordinate in setPosition when forcing Shimeji to jump off from wall to chase food
  * The Shimeji frozen (animation stopped, unable to drag) after invoke duplicate Shimeji function from the right click menu
- *      -> Added setPlay(true) in duplicateShimeji function of Shimeji class as callback after clicking duplicate option in context menu
+ *      > Added setPlay(true) in duplicateShimeji function of Shimeji class as callback after clicking duplicate option in context menu
  * Shimeji right click menu does not hide when clicked on elsewhere on page
- *      -> moved eventlistener for close menu function into oncontextmenu function to avoid active event listening
+ *      > moved eventlistener for close menu function into oncontextmenu function to avoid active event listening
  * Food dissapear when dragging a Shimeji while all Shimeji is running towards the food
- *      -> Added success flag to check if Shimeji arrived at the food position before allowing eating the food to avoid invalid ShimejiFood.eat call when exiting the animation loop after dragging a Shimeji
+ *      > Added success flag to check if Shimeji arrived at the food position before allowing eating the food to avoid invalid ShimejiFood.eat call when exiting the animation loop after dragging a Shimeji
  * 
  * ACTIVE BUGS:
  * 
+ * TODOS:
+ * Shimeji becomes larger over time when eating, then explode
  */
 
 // fixed shimeji size in pixel
@@ -1090,7 +1092,7 @@ class Shimeji extends BoundedHTMLElement {
         x = x * x;
         y = y * y;
         let dist = Math.sqrt(x + y);
-        if (this.closestFoodDistance !== null && this.closestFoodDistance < dist) {
+        if (this.closestFoodDistance !== null && this.closestFoodDistance <= dist) {
             return;
         }
         if (this.isChasingFood && this.closestFoodId === food.target.id) // avoid repetition of function invocation
@@ -1168,16 +1170,17 @@ class Shimeji extends BoundedHTMLElement {
             }
             await sleep(FPS_INTERVAL_FALLING);
         }
-        
+
+        if (this.closestFoodId !== food.target.id)
+            return; // change target food
         if (this.closestFoodId === food.target.id && food.target.canEat() && !this.#isDragged && success) {
             await this.eatDroppedFood(food.target);
         }
-        if (!this.isChasingFood || !success) {
-            this.isChasingFood = false;
-            this.closestFoodDistance = null;
-            this.closestFoodId = null;
-            await this.nextAction();
-        }
+        this.isChasingFood = false;
+        this.closestFoodDistance = null;
+        this.closestFoodId = null;
+        await this.nextAction(ACTIONS.standing);
+
         return;
     }
 
@@ -1311,7 +1314,7 @@ class Shimeji extends BoundedHTMLElement {
         }
     }
 
-    nextAction = async () => {
+    nextAction = async (actionId = null) => {
         const newTimeout = generateTimeOutDuration();
         // clear previous timeout
         clearTimeout(this.#actionTimeout);
@@ -1323,7 +1326,7 @@ class Shimeji extends BoundedHTMLElement {
         this.setActionTimeout(newTimeout);
         
         // set action animation
-        let currAction = generateActionID(this.#action);
+        let currAction = (actionId)? actionId : generateActionID(this.#action);
         this.updateMaxHeight();
         if (this.bottom < this.maxHeight) {
             if (this.onXBound()) {
