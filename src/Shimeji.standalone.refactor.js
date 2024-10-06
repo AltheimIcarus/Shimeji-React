@@ -1,3 +1,21 @@
+/**
+ * v1.2.2
+ * NEW FEATURES:
+ * Refactored animation to a single while loop so that no multiple while loops of different actions will race to be displayed on screen.
+ * 
+ * BUGS FIXED:
+ * Shimeji wont chase and eat food after falling from wall. 
+ * Shimeji immediately chase new food after starting to eat another food.
+ * All Shimeji stuck and stop animating when one Shimeji eats a food.
+ * Shimeji stop chasing food after dragged and landing.
+ * 
+ * ACTIVE BUGS:
+ * rare case (unable to reproduce) where one or few Shimejis randomly stop chasing food in mid way while food still exists (stuck in chasing food loop with non-walking action).
+ * 
+ * TODOS:
+ * Shimeji becomes larger over time when eating, then explode
+ */
+
 // GLOBAL VARIABLES
 const TIME_SECOND_IN_MS = 1000;
 
@@ -876,6 +894,8 @@ class Shimeji extends BoundedHTMLElement {
     };
 
     eatDroppedFood = (food) => {
+        // stop chasing food
+        this.isChasingFood = false;
         // start eating food animation
         this.setAction(ACTIONS.eatingDroppedFood);
         // align before animation
@@ -886,11 +906,15 @@ class Shimeji extends BoundedHTMLElement {
         this.setActionTimeout(4 * TIME_SECOND_IN_MS);
         this.#actionBeginTime = Date.now();
 
+        this.setPlay(true);
+
+        // if food is eaten by other Shimeji, perform hard reset on food variables
         if( !food.eat() ) {
             // clear food related variables
             this.closestFoodDistance = null;
             this.closestFoodId = null;
             this.isChasingFood = false;
+            this.targetFood = null;
             return;
         }
 
@@ -899,6 +923,8 @@ class Shimeji extends BoundedHTMLElement {
 
     // chase food
     toClosestFood = async (e) => {
+        if (this.#isDragged || this.#action === ACTIONS.falling || this.#action === ACTIONS.landing) return;
+        // setting food variables
         const food = e.detail;
         let x = this.position.x + this.radius;
         let y = this.position.y + this.radius;
@@ -912,12 +938,15 @@ class Shimeji extends BoundedHTMLElement {
         }
         if (this.isChasingFood && this.closestFoodId === food.target.id) // avoid repetition of function invocation
             return;
+        
+        // Setting up variables for chasing food
+        this.closestFoodDistance = dist;
+        this.isChasingFood = true;
+        this.closestFoodId = food.target.id;
+        this.setTargetFood(food.target);
 
         // move left or right toward food
         this.setMoveDirection( (food.x < this.position.x + this.radius)? MOVE_PIXEL_NEG : MOVE_PIXEL_POS );
-                
-        // align before movement
-        this.alignShimeji();
 
         // take shortcut from sky and wall to ground
         if (this.onXBound()) {
@@ -934,15 +963,11 @@ class Shimeji extends BoundedHTMLElement {
             });
             this.fall();
         }
-        
-        // Setting up variables for chasing food
-        this.closestFoodDistance = dist;
-        this.isChasingFood = true;
-        this.closestFoodId = food.target.id;
-        this.setTargetFood(food.target);
 
-        while (this.shouldFall()) {
+        while (true) {
             // do nothing
+            if (!this.shouldFall()) break;
+            await sleep(FPS_INTERVAL_FALLING);
         }
         
         // continue chasing food
@@ -955,6 +980,27 @@ class Shimeji extends BoundedHTMLElement {
         this.#actionBeginTime = Date.now();
 
         return;
+    }
+
+    // clear all action related states
+    clearActionStates = () => {
+        console.log('cancel');
+        // play
+        this.setPlay(false);
+        if (this.#actionTimeout) {
+            this.setActionTimeout(null);
+        }
+        // alignment
+        this.setRotation('none');
+
+        // food
+        this.closestFoodDistance = null;
+        this.closestFoodId = null;
+        this.isChasingFood = false;
+        this.targetFood = null;
+
+        // move direction
+        this.setMoveDirection(null);
     }
 
     // remove current Shimeji from document
@@ -1013,6 +1059,28 @@ class Shimeji extends BoundedHTMLElement {
                     return;
                 }
                 this.setRotation('none');
+                return;
+            }
+            case ACTIONS.standing:
+            case ACTIONS.sleeping:
+            case ACTIONS.dragging:
+            case ACTIONS.eating: {
+                // no other action is permitted when not on the ground except climbing & walking
+                this.setRotation('none');
+                return;
+            }
+            default: {
+                break;
+            }
+        }
+        // special case for falling, eatingDroppedFood
+        switch (this.#moveDirection) {
+            case MOVE_PIXEL_NEG: {
+                this.setRotation('none');
+                return;
+            }
+            case MOVE_PIXEL_POS: {
+                this.setRotation('scaleX(-1)');
                 return;
             }
             default: {
@@ -1146,6 +1214,7 @@ class Shimeji extends BoundedHTMLElement {
                         x: this.position.x,
                         y: this.position.y + GRAVITY_PIXEL,
                     });
+                    this.alignShimeji();
                     continue;
                 }
 
@@ -1165,7 +1234,7 @@ class Shimeji extends BoundedHTMLElement {
 
                 
                 if (!this.#play)
-                    this.setPlay(false);
+                    this.setPlay(true);
                 
                 // move on to next action
                 if (!this.isChasingFood) {
@@ -1182,26 +1251,41 @@ class Shimeji extends BoundedHTMLElement {
                 continue;
             }
             if (this.isChasingFood) {
+                // if food is eaten by other Shimeji
                 if (
-                    this.#isDragged ||
+                    this.targetFood === null ||
                     document.getElementById(`shimeji-food-${this.targetFood.id}`) === null ||
-                    !this.isChasingFood ||
-                    this.closestFoodId !== this.targetFood.id ||
                     !this.targetFood.canEat()
                 ) {
+                    // stop chasing food
+                    this.isChasingFood = false;
+                    // clear food related variables
+                    this.closestFoodDistance = null;
+                    this.closestFoodId = null;
+                    this.targetFood = null;
+                    // start next non event based action
+                    this.nextAction(ACTIONS.standing);
                     currSequence = this.#sequence;
                     continue;
                 }
+
+                // change target food
+                if (this.closestFoodId !== this.targetFood.id)
+                    continue;
+
+                // chase food
                 if (this.#play && Date.now() - this.#actionBeginTime >= FPS_INTERVAL_CHASING_FOOD) {
                     this.#actionBeginTime = Date.now();
                     this.actions[this.#action].nextFrame();
                     this.closestFoodDistance = Math.abs(this.position.x + this.radius - this.targetFood.position.x);
 
+                    // reached food
                     if ( this.closestFoodDistance < MOVE_PIXEL_POS ) {
                         this.eatDroppedFood(this.targetFood);
                         continue;
                     }
 
+                    // reached food alternative condition
                     if ( this.position.x + this.#moveDirection <= 0 || this.right + this.#moveDirection >= this.updateMaxWidth() ) {
                         this.setPosition({
                             x: this.position.x + this.#moveDirection,
@@ -1213,27 +1297,23 @@ class Shimeji extends BoundedHTMLElement {
 
                     this.moveShimeji();
                     this.alignShimeji();// align after movement
+                    await sleep(FPS_INTERVAL_FALLING);
                     continue;
                 }
-                await sleep(FPS_INTERVAL_FALLING);
-                
-                // change target food
-                if (this.closestFoodId !== this.targetFood.id)
-                    continue;
 
             }
             if (this.#action === ACTIONS.eatingDroppedFood) {
-                // clear food related variables
-                this.closestFoodDistance = null;
-                this.closestFoodId = null;
-                this.isChasingFood = false;
-                console.log('here');
+                // if finished eating food
                 if (
                     this.#isDragged ||
                     this.targetFood === null ||
                     this.#actionBeginTime > this.#actionTimeout
                 ) {
+                    // clear food related variables
+                    this.closestFoodDistance = null;
+                    this.closestFoodId = null;
                     this.targetFood = null;
+                    // start next non event based action
                     this.nextAction(ACTIONS.standing);
                     currSequence = this.#sequence;
                     continue;
@@ -1338,11 +1418,7 @@ class Shimeji extends BoundedHTMLElement {
         }
         e.stopPropagation();
         if (this.#play && !this.#isDragged && e.button===0) {
-            this.setPlay(false);
-            if (this.#actionTimeout) {
-                this.setActionTimeout(null);
-            }
-            this.setRotation('none');
+            this.clearActionStates();
             this.setIsDragged(true);
             this.setAction(ACTIONS.dragging);
             

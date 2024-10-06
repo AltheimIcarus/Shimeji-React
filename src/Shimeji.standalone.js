@@ -1,29 +1,16 @@
 /**
- * v1.2.1
+ * v1.2.2
  * NEW FEATURES:
- * Added auto spawn new Shimeji with an interval (second) option
- * Added release as Tampermonkey and GreasyFork script
- * Allow Shimeji to run towards closest food at faster speed
+ * Refactored animation to a single while loop so that no multiple while loops of different actions will race to be displayed on screen.
  * 
  * BUGS FIXED:
- * All shimeji display eating animation when one of it gets the food
- *      > added canEat and ShimejiFood.id check in toClosestFood function of Shimeji to avoid multiple Shimeji eating the same food at a time
- * All shimeji stopped animation after one of it gets the food
- *      > added exit condition in Shimeji.toClosestFood function for Shimeji that missed the food
- * All food removed when one of the food is eaten
- *      > added canEat and ShimejiFood.id check in toClosestFood function of Shimeji to avoid eating multiple foods at same time
- * Shimeji movement speed towards closest food increases infinitely until sudden teleport
- *      > fixed the frame rate of Shimeji to run at constant speed towards food
- * All Shemeji on left/right wall will fall from LEFT wall when food is dropped
- *      > changed the x coordinate in setPosition when forcing Shimeji to jump off from wall to chase food
- * The Shimeji frozen (animation stopped, unable to drag) after invoke duplicate Shimeji function from the right click menu
- *      > Added setPlay(true) in duplicateShimeji function of Shimeji class as callback after clicking duplicate option in context menu
- * Shimeji right click menu does not hide when clicked on elsewhere on page
- *      > moved eventlistener for close menu function into oncontextmenu function to avoid active event listening
- * Food dissapear when dragging a Shimeji while all Shimeji is running towards the food
- *      > Added success flag to check if Shimeji arrived at the food position before allowing eating the food to avoid invalid ShimejiFood.eat call when exiting the animation loop after dragging a Shimeji
+ * Shimeji wont chase and eat food after falling from wall. 
+ * Shimeji immediately chase new food after starting to eat another food.
+ * All Shimeji stuck and stop animating when one Shimeji eats a food.
+ * Shimeji stop chasing food after dragged and landing.
  * 
  * ACTIVE BUGS:
+ * rare case (unable to reproduce) where one or few Shimejis randomly stop chasing food in mid way while food still exists (stuck in chasing food loop with non-walking action).
  * 
  * TODOS:
  * Shimeji becomes larger over time when eating, then explode
