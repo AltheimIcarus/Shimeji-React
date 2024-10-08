@@ -1,19 +1,14 @@
 /**
- * v1.2.2
+ * v1.2.3-refactor
  * NEW FEATURES:
- * Refactored animation to a single while loop so that no multiple while loops of different actions will race to be displayed on screen.
+ * Implementing Shimeji becomes larger over time after eating dropped food, then explode into multiple mini Shimejis.
  * 
  * BUGS FIXED:
- * Shimeji wont chase and eat food after falling from wall. 
- * Shimeji immediately chase new food after starting to eat another food.
- * All Shimeji stuck and stop animating when one Shimeji eats a food.
- * Shimeji stop chasing food after dragged and landing.
+ * None...
  * 
  * ACTIVE BUGS:
  * rare case (unable to reproduce) where one or few Shimejis randomly stop chasing food in mid way while food still exists (stuck in chasing food loop with non-walking action).
  * 
- * TODOS:
- * Shimeji becomes larger over time when eating, then explode
  */
 
 // GLOBAL VARIABLES
@@ -22,6 +17,9 @@ const TIME_SECOND_IN_MS = 1000;
 // fixed shimeji size in pixel
 var WIDTH = 100;
 var HEIGHT = 100;
+
+// default growing factor of Shimeji size after eating food
+var GROW_FACTOR = 1.1; // 110 %
 
 // min and max animation repeat duration
 var MIN_DURATION_MS = 10000;
@@ -835,6 +833,16 @@ class Shimeji extends BoundedHTMLElement {
     setTargetFood = (food) => {
         this.targetFood = food;
     }
+    /**
+     * @param {number} width
+     * @param {number} height
+     */
+    setSize = (width, height) => {
+        this.width = width;
+        this.height = height;
+        this.dom.style.width = `${width}px`;
+        this.dom.style.height = `${height}px`;
+    }
 
     // handle right click to open menu
     handleRightClick = (e) => {
@@ -892,6 +900,26 @@ class Shimeji extends BoundedHTMLElement {
         }
         document.removeEventListener('click', this.handleCloseMenu);
     };
+
+    // grow in size when consumed food
+    grow = () => {
+        this.setSize(width = this.width * GROW_FACTOR, height = this.height * GROW_FACTOR);
+    }
+
+    // explode into mini Shimejis when reached maximum size
+    explode = () => {
+        // define mini Shimeji size
+        const miniWidth = WIDTH * (1 - GROW_FACTOR);
+        const miniHeight = HEIGHT * (1 - GROW_FACTOR);
+        
+        // duplicate multiple mini Shimejis
+        // new Shimeji();
+        
+        // explode animation
+
+        // reduce current Shimeji size to by (1 - GROW_FACTOR)
+        this.setSize(width = miniWidth, height = miniHeight);
+    }
 
     eatDroppedFood = (food) => {
         // stop chasing food
@@ -1601,6 +1629,7 @@ class ShimejiController {
      * @param {boolean} customizeOptions.MOVE_PIXEL_POS Default positive moving speed in pixel: 10 is recommended
      * @param {boolean} customizeOptions.MOVE_PIXEL_NEG Default negative moving speed in pixel: -10 is recommended
      * @param {boolean} customizeOptions.MAX_FOOD_COUNT Maximum number of Shimeji feed drop allowed at a same time
+     * @param {boolean} customizeOptions.GROW_FACTOR Default growing factor of Shimeji size after eating food
      * @param {*} customizeOptions.ACTIONS_SOURCES sources of custom images (frames) for each Shimeji action
      */
     constructor (options={
@@ -1654,6 +1683,8 @@ class ShimejiController {
             MOVE_PIXEL_NEG: -10,   // 10 is recommended
             // Maximum number of Shimeji feed drop allowed at a same time
             MAX_FOOD_COUNT: 5,
+            // Default growing factor of Shimeji size after eating food
+            GROW_FACTOR: 1.1,
             // sources of images (frames) for each Shimeji action
             ACTIONS_SOURCES: {
                 'standing'  : [
@@ -1727,6 +1758,7 @@ class ShimejiController {
             MOVE_PIXEL_POS = options.customizeOptions.MOVE_PIXEL_POS;
             MOVE_PIXEL_NEG = options.customizeOptions.MOVE_PIXEL_NEG;
             MAX_FOOD_COUNT = options.customizeOptions.MAX_FOOD_COUNT;
+            GROW_FACTOR = options.customizeOptions.GROW_FACTOR;
             ACTIONS_SOURCES = options.customizeOptions.ACTIONS_SOURCES;
         }
         this.shimejiOptions = options.shimejiOptions;

@@ -1,5 +1,5 @@
 /**
- * v1.2.2
+ * v1.2.3
  * NEW FEATURES:
  * Refactored animation to a single while loop so that no multiple while loops of different actions will race to be displayed on screen.
  * 
