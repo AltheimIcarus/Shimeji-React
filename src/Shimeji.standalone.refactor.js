@@ -1,5 +1,5 @@
 /**
- * v1.2.4-refactor
+ * v1.2.5-refactor
  * NEW FEATURES:
  * Implementing Shimeji becomes larger over time after eating dropped food, then explode into multiple mini Shimejis.
  * 
@@ -725,6 +725,35 @@ class ShimejiFood extends BoundedHTMLElement {
     }
 };
 
+const parabolicProjectile = (x, y, power=25, angle=45) => {
+    angle = angle % 90;
+    power = power % 90;
+    let projectiles = [];
+    const rad = angle * Math.PI / 180.0;
+    const GRAVITY = -9.81;
+    let initialVelocity = {x: Math.cos(rad) * power, y: Math.sin(rad) * power};
+
+    const kinematicEquation = (acceleration, velocity, position, time) => {
+        return 0.5 * acceleration * time * time + velocity * time + position;
+    }
+
+    console.log(x, ': ', y);
+    let newX = x * 1.0;
+    let newY = y * 1.0;
+
+    let time = 0.25;
+    do {
+        newX = Math.round((kinematicEquation(0, initialVelocity.x, x, time) + Number.EPSILON) * 10) / 10;
+        newY = Math.round((kinematicEquation(GRAVITY, initialVelocity.y, y, time) + Number.EPSILON) * 10) / 10;
+        time += 0.25;
+        projectiles.push({x: newX, y: newY});
+        console.log(newX, ': ', newY);
+    } while (newY > y);
+    projectiles[projectiles.length-1].y = y;
+    console.log(projectiles[projectiles.length-1]);
+    return projectiles;
+}
+
 // Shimeji main object
 class Shimeji extends BoundedHTMLElement {
     static count = 0;
@@ -903,7 +932,12 @@ class Shimeji extends BoundedHTMLElement {
 
     // grow in size when consumed food
     grow = () => {
-        this.setSize(width = this.width * GROW_FACTOR, height = this.height * GROW_FACTOR);
+        this.setSize(this.width * GROW_FACTOR, this.height * GROW_FACTOR);
+        this.setPosition({
+            x: this.position.x,
+            y: this.position.y + (this.height * (1 - GROW_FACTOR))
+        });
+        parabolicProjectile(this.position.x, this.position.y);
     }
 
     // explode into mini Shimejis when reached maximum size
@@ -1341,6 +1375,7 @@ class Shimeji extends BoundedHTMLElement {
                     this.closestFoodDistance = null;
                     this.closestFoodId = null;
                     this.targetFood = null;
+                    this.grow();
                     // start next non event based action
                     this.nextAction(ACTIONS.standing);
                     currSequence = this.#sequence;
