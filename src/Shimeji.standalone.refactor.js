@@ -1,5 +1,5 @@
 /**
- * v1.2.3-refactor
+ * v1.2.4-refactor
  * NEW FEATURES:
  * Implementing Shimeji becomes larger over time after eating dropped food, then explode into multiple mini Shimejis.
  * 
@@ -714,7 +714,7 @@ class ShimejiFood extends BoundedHTMLElement {
 
         this.setPosition(position);
 
-        document.body.appendChild(this.dom);
+        document.documentElement.appendChild(this.dom);
 
         if (this.stayInWindow) {
             window.addEventListener('resize', this.handleWindowResize);
@@ -1525,7 +1525,7 @@ class Shimeji extends BoundedHTMLElement {
 
 
         // apply settings and append Shimeji to document
-        document.body.appendChild(this.dom);
+        document.documentElement.appendChild(this.dom);
 
         // drag event handler
         if (this.draggable) {
