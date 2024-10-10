@@ -1,5 +1,5 @@
 /**
- * v1.2.5-refactor
+ * v1.2.6-refactor
  * NEW FEATURES:
  * Implementing Shimeji becomes larger over time after eating dropped food, then explode into multiple mini Shimejis.
  * 
@@ -68,6 +68,19 @@ var MOVE_PIXEL_NEG = -10;   // 10 is recommended
 
 // Maximum number of Shimeji feed drop allowed at a same time
 var MAX_FOOD_COUNT = 5;
+
+// Maximum count of mini Shimejis to divide after explosion
+var MAX_EXPLODE_COUNT = 10;
+// Minimum count of mini Shimejis to divide after explosion
+var MIN_EXPLODE_COUNT = 3;
+// Maximum explosion force/power
+var MAX_EXPLODE_POWER = 90;
+// Minimum explosion force/power
+var MIN_EXPLODE_POWER = 10;
+// Maximum explosion angle (deg)
+var MAX_EXPLODE_ANGLE = 90;
+// Minimum explosion angle (deg)
+var MIN_EXPLODE_ANGLE = 30;
 
 // sources of images (frames) for each Shimeji action
 var ACTIONS_SOURCES = {
@@ -725,19 +738,30 @@ class ShimejiFood extends BoundedHTMLElement {
     }
 };
 
-const parabolicProjectile = (x, y, power=25, angle=45) => {
-    angle = angle % 90;
-    power = power % 90;
-    let projectiles = [];
+
+/**
+ * quadratic and kinematic equation to calculate parabolic trajectory
+ * @param {number} x    x coordinate
+ * @param {number} y    y coordinate
+ * @param {number} power    initial push force
+ * @param {number} angle    projection angle
+ * @param {number} positivity   1 = to right, -1 = to left
+ */
+const parabolicTrajectory = (x, y, power=25, angle=45, positivity=1) => {
+    angle = angle >= MIN_EXPLODE_ANGLE && angle <= MAX_EXPLODE_ANGLE? angle : (angle + MIN_EXPLODE_ANGLE) % MAX_EXPLODE_ANGLE;
+    power = power >= MIN_EXPLODE_POWER && power <= MAX_EXPLODE_POWER? power : (power + MIN_EXPLODE_POWER) % MAX_EXPLODE_POWER;
+    positivity = positivity === 1? 1 : -1;
+
+    let trajectories = [];
     const rad = angle * Math.PI / 180.0;
     const GRAVITY = -9.81;
-    let initialVelocity = {x: Math.cos(rad) * power, y: Math.sin(rad) * power};
+    let initialVelocity = {x: positivity * Math.cos(rad) * power, y: positivity * Math.sin(rad) * power};
 
     const kinematicEquation = (acceleration, velocity, position, time) => {
         return 0.5 * acceleration * time * time + velocity * time + position;
     }
 
-    console.log(x, ': ', y);
+    // console.log(x, ': ', y);
     let newX = x * 1.0;
     let newY = y * 1.0;
 
@@ -746,12 +770,12 @@ const parabolicProjectile = (x, y, power=25, angle=45) => {
         newX = Math.round((kinematicEquation(0, initialVelocity.x, x, time) + Number.EPSILON) * 10) / 10;
         newY = Math.round((kinematicEquation(GRAVITY, initialVelocity.y, y, time) + Number.EPSILON) * 10) / 10;
         time += 0.25;
-        projectiles.push({x: newX, y: newY});
-        console.log(newX, ': ', newY);
+        trajectories.push({x: newX, y: newY});
+        // console.log(newX, ': ', newY);
     } while (newY > y);
-    projectiles[projectiles.length-1].y = y;
-    console.log(projectiles[projectiles.length-1]);
-    return projectiles;
+    trajectories[trajectories.length-1].y = y;
+    // console.log(trajectories[trajectories.length-1]);
+    return trajectories;
 }
 
 // Shimeji main object
@@ -774,6 +798,8 @@ class Shimeji extends BoundedHTMLElement {
     #actionTimeout = null;
     // set if animation is paused (false) or played (true)
     #play = false;
+    // track if shimeji is being propelled
+    #isPropelled = false;
     // track if shimeji is being dragged
     #isDragged = false;
     // track shimeji move direction for walking or climbing actions, see config for list of available options
@@ -828,6 +854,12 @@ class Shimeji extends BoundedHTMLElement {
      */
     setPlay = (val) => {
         this.#play = val;
+    }
+    /**
+     * @param {boolean} val
+     */
+    setIsPropelled = (val) => {
+        this.#isPropelled = val;
     }
     /**
      * @param {boolean} val
@@ -930,6 +962,37 @@ class Shimeji extends BoundedHTMLElement {
         document.removeEventListener('click', this.handleCloseMenu);
     };
 
+    /**
+     * **Propel Shimeji in given parabolic trajectory.**
+     * @param {[{x: number, y: number},...{}]} trajectory   parabolic trajectory consisting of list of 2D coordinates to propel Shimeji.
+     */
+    propel = async (trajectory) => {
+        if (trajectory.length === 1) return;
+        this.clearActionStates();
+        this.setIsPropelled(true);
+        this.setAction(ACTIONS.standing);
+
+        const direction = trajectory[1].x - trajectory[0].x > 0? 1 : -1;
+        this.setMoveDirection(direction);
+        this.alignShimeji();
+        let fps_interval_explosion = FPS_INTERVAL_FALLING;
+
+        for (let i=0; i<trajectory.length; ++i) {
+            this.setPosition({
+                x: trajectory[i].x,
+                y: trajectory[i].y
+            });
+            await sleep(fps_interval_explosion);
+            fps_interval_explosion += 10; // decrement animation speed
+        }
+        await this.land();
+        this.setIsPropelled(false);
+        this.setAction(ACTIONS.standing);
+        this.setSequence(this.#sequence + 1);
+        
+        return;
+    }
+
     // grow in size when consumed food
     grow = () => {
         this.setSize(this.width * GROW_FACTOR, this.height * GROW_FACTOR);
@@ -937,7 +1000,6 @@ class Shimeji extends BoundedHTMLElement {
             x: this.position.x,
             y: this.position.y + (this.height * (1 - GROW_FACTOR))
         });
-        parabolicProjectile(this.position.x, this.position.y);
     }
 
     // explode into mini Shimejis when reached maximum size
@@ -946,10 +1008,36 @@ class Shimeji extends BoundedHTMLElement {
         const miniWidth = WIDTH * (1 - GROW_FACTOR);
         const miniHeight = HEIGHT * (1 - GROW_FACTOR);
         
-        // duplicate multiple mini Shimejis
-        // new Shimeji();
+        // random mini Shimeji count to divide
+        const duplicateCount = Math.floor( Math.random() * (MAX_EXPLODE_COUNT - MIN_EXPLODE_COUNT + 1) ) + MIN_EXPLODE_COUNT;
         
-        // explode animation
+        // calculate propel trajectories
+        let trajectories = Array(duplicateCount).fill(undefined);
+        for (let i=0; i<duplicateCount; ++i) {
+            const power = Math.floor( Math.random() * (MAX_EXPLODE_POWER - MIN_EXPLODE_POWER + 1) ) + MIN_EXPLODE_POWER;
+            const angle = Math.floor( Math.random() * (MAX_EXPLODE_ANGLE - MIN_EXPLODE_ANGLE + 1) ) + MIN_EXPLODE_ANGLE;
+            trajectories[i] = parabolicTrajectory(this.position.x, this.position.y, power, angle, i < duplicateCount / 2);
+        }
+        
+        // duplicate multiple mini Shimejis
+        for (let i=0; i<duplicateCount; ++i) {
+            let mini = new Shimeji({
+                animate: this.animate,
+                draggable: this.draggable,
+                move: this.move,
+                chaseFood: this.chaseFood,
+                duplicable: this.duplicable,
+                stayInWindow: this.stayInWindow,
+                showMenu: this.showMenu,
+                spawnFromSky: false, // not spawned from sky but exploded and divided from parent position
+                width: miniWidth,
+                height: miniHeight,
+            });
+
+            // explode animation
+            mini.propel(trajectories[i]);
+        }
+        
 
         // reduce current Shimeji size to by (1 - GROW_FACTOR)
         this.setSize(width = miniWidth, height = miniHeight);
@@ -1265,6 +1353,9 @@ class Shimeji extends BoundedHTMLElement {
         let currSequence = this.#sequence;
         while (!this.#isRemoved) {
             // Event based action
+            if (this.#isPropelled) {
+                continue;
+            }
             if (this.#isDragged || this.#action === ACTIONS.dragging) {
                 await sleep(FPS_INTERVAL_FALLING);
                 continue;
@@ -1500,6 +1591,9 @@ class Shimeji extends BoundedHTMLElement {
      * @param {boolean} options.duplicable is shimeji duplicable
      * @param {boolean} options.stayInWindow will shimeji stay in window when scrolled or resized
      * @param {boolean} options.showMenu enable or disable right click menu of shimeji
+     * @param {boolean} options.spawnFromSky enable or disable shimeji spawned from sky
+     * @param {boolean} options.width custom Shimeji width
+     * @param {boolean} options.height custom Shimeji height
      * @returns Shimeji instance
      */
     constructor(options={
@@ -1510,6 +1604,9 @@ class Shimeji extends BoundedHTMLElement {
         duplicable: true,
         stayInWindow: true,
         showMenu: true,
+        spawnFromSky: true,
+        width: WIDTH,
+        height: HEIGHT,
     }) {
         super();
         // settings
@@ -1522,16 +1619,20 @@ class Shimeji extends BoundedHTMLElement {
         this.showMenu = options.showMenu;
 
         // class attributes
-        this.width = WIDTH;
-        this.height = HEIGHT;
-        this.right = 1100 + WIDTH;
-        this.bottom = 10 + HEIGHT;
+        this.width = options.width;
+        this.height = options.height;
+        this.right = 1100 + this.width;
+        this.bottom = 10 + this.height;
         this.radius = Math.max(this.width / 2, this.height / 2);
         
         // begin animation
         this.spawnShimeji();
-        this.fall();
-        this.animateShimeji();
+        if (spawnFromSky) {
+            this.fall();
+            this.animateShimeji();
+        } else {
+            setTimeout(() => this.animateShimeji(), TIME_SECOND_IN_MS);
+        }
 
         return this;
     }
@@ -1543,8 +1644,8 @@ class Shimeji extends BoundedHTMLElement {
         const eleId = 'shimeji-' + this.id;
         this.dom.setAttribute('id', eleId);
         this.dom.classList.add('shimeji-container');
-        this.dom.style.width = `${WIDTH}px`;
-        this.dom.style.height = `${HEIGHT}px`;
+        this.dom.style.width = `${this.width}px`;
+        this.dom.style.height = `${this.height}px`;
         // this.dom.style.top = `${this.position.y}px`;
         // this.dom.style.left = `${this.position.x}px`;
         this.dom.style.transform = `translate(${this.position.x}px, ${this.position.y}px)`;
@@ -1644,6 +1745,7 @@ class ShimejiController {
      * @param {boolean} shimejiOptions.duplicable is shimeji duplicable
      * @param {boolean} shimejiOptions.stayInWindow will shimeji stay in window when scrolled or resized
      * @param {boolean} shimejiOptions.showMenu enable or disable right click menu of shimeji
+     * @param {boolean} shimejiOptions.spawnFromSky enable or disable shimeji spawned from sky
      * @param {*} foodOptions Shimeji food related options
      * @param {boolean} foodOptions.dropFood enable or disable food dropping
      * @param {boolean} foodOptions.stayInWindow will food stay in window when scrolled or resized
@@ -1676,13 +1778,14 @@ class ShimejiController {
             duplicable: true,
             stayInWindow: true,
             showMenu: true,
+            spawnFromSky: true,
         },
         foodOptions: {
             dropFood: true,
             stayInWindow: true,
         },
         autoSpawnShimeji: false,
-        spawnInteral: 20,
+        spawnInterval: 20,
         customizeOptions: {
             WIDTH: 100,
             HEIGHT: 100,
@@ -1809,7 +1912,7 @@ class ShimejiController {
         if (options.autoSpawnShimeji) {
             this.#spawnInterval = setInterval(() => {
                 new Shimeji(this.shimejiOptions);
-            }, options.spawnInteral * TIME_SECOND_IN_MS);
+            }, options.spawnInterval * TIME_SECOND_IN_MS);
         }
         return this;
     }
