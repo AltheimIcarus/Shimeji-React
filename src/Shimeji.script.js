@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Shimeji.Js
 // @namespace    http://tampermonkey.net/
-// @version      1.1.0
+// @version      1.2.0
 // @license      MIT
 // @homepage     https://github.com/AltheimIcarus/
 // @website      https://github.com/AltheimIcarus/Shimeji-React
@@ -13,36 +13,57 @@
 // ==/UserScript==
 
 // fixed shimeji size in pixel
-const WIDTH = 100;
-const HEIGHT = 100;
+/**
+ * v1.3.0-refactor
+ * NEW FEATURES:
+ * Implemented Shimeji becomes larger over time after eating dropped food, then explode into multiple mini Shimejis.
+ * Added customization for Shimeji maximum grow size
+ * 
+ * BUGS FIXED:
+ * 
+ * ACTIVE BUGS:
+ * rare case (unable to reproduce) where one or few Shimejis randomly stop chasing food in mid way while food still exists (stuck in chasing food loop with non-walking action).
+ * 
+ */
 
-// min and max animation repeat duration
-const MIN_DURATION_MS = 10000;
-const MAX_DURATION_MS = 20000;
-
+// GLOBAL VARIABLES
 const TIME_SECOND_IN_MS = 1000;
 
+// fixed shimeji size in pixel
+var WIDTH = 100;
+var HEIGHT = 100;
+
+// default growing factor of Shimeji size after eating food
+var GROW_FACTOR = 1.1; // 110 %
+
+// maximum grow ratio to initial width
+var MAX_GROW_RATIO = 2;
+
+// min and max animation repeat duration
+var MIN_DURATION_MS = 10000;
+var MAX_DURATION_MS = 20000;
+
 // Default frame rate of falling animation
-const FRAME_RATE_FALLING = 25;  // must be lesser than 1000, 25 is recommended
+var FRAME_RATE_FALLING = 25;  // must be lesser than 1000, 25 is recommended
 
 // Default FPS Interval in ms for falling animation
-const FPS_INTERVAL_FALLING = TIME_SECOND_IN_MS / FRAME_RATE_FALLING;
+var FPS_INTERVAL_FALLING = TIME_SECOND_IN_MS / FRAME_RATE_FALLING;
 
 // Default FPS Interval in ms for chasing food animation
-const FPS_INTERVAL_CHASING_FOOD = 100; // 100 is recommended for running towards food
+var FPS_INTERVAL_CHASING_FOOD = 100; // 100 is recommended for running towards food
 
 // Default frame rate of action animation
-const FRAME_RATE_ACTION = 1;  // 1 is recommended
+var FRAME_RATE_ACTION = 1;  // 1 is recommended
 
 // Default FPS Interval in ms for action animation
-const FPS_INTERVAL_ACTION = TIME_SECOND_IN_MS / FRAME_RATE_ACTION;
+var FPS_INTERVAL_ACTION = TIME_SECOND_IN_MS / FRAME_RATE_ACTION;
 
 // Default gravity falling speed (px), 30 is recommended
-const GRAVITY_PIXEL = 30;
+var GRAVITY_PIXEL = 30;
 
 // DO NOT CHANGE, YOU MAY ADD NEW ACTION BUT DO NOT ALTER EXISTING VALUE
 // available action animation of shimeji
-const ACTIONS = {
+var ACTIONS = {
     'standing'  : 0,
     'walking'   : 1,
     'sleeping'  : 2,
@@ -56,18 +77,31 @@ const ACTIONS = {
 
 // Default range of non-event-based action
 // event-based actions are only activated based on triggered event such as dragging the shimeji or letting shimeji fall from sky
-const MIN_ACTION_ID = 0;
-const MAX_ACTION_ID = 3;
+var MIN_ACTION_ID = 0;
+var MAX_ACTION_ID = 3;
 
 // Default moving speed in pixel
-const MOVE_PIXEL_POS = 10;   // 10 is recommended
-const MOVE_PIXEL_NEG = -10;   // 10 is recommended
+var MOVE_PIXEL_POS = 10;   // 10 is recommended
+var MOVE_PIXEL_NEG = -10;   // 10 is recommended
 
 // Maximum number of Shimeji feed drop allowed at a same time
-const MAX_FOOD_COUNT = 5;
+var MAX_FOOD_COUNT = 5;
+
+// Maximum count of mini Shimejis to divide after explosion
+var MAX_EXPLODE_COUNT = 10;
+// Minimum count of mini Shimejis to divide after explosion
+var MIN_EXPLODE_COUNT = 5;
+// Maximum explosion force/power
+var MAX_EXPLODE_POWER = 90;
+// Minimum explosion force/power
+var MIN_EXPLODE_POWER = 10;
+// Maximum explosion angle (deg)
+var MAX_EXPLODE_ANGLE = 90;
+// Minimum explosion angle (deg)
+var MIN_EXPLODE_ANGLE = 30;
 
 // sources of images (frames) for each Shimeji action
-const ACTIONS_SOURCES = {
+var ACTIONS_SOURCES = {
     'standing'  : [
         'data:image/png;base64,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',
         'data:image/png;base64,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',
@@ -152,126 +186,6 @@ const sleep = async (timeMs) => {
 }
 
 /**
- * function to determine if shimeji should fall from sky
- * @param {number} x    x coordinate of Shimeji
- * @param {number} y    y coordinate of Shimeji
- * @param {number} max_x    viewport maximum width (right) excluding scrollbar
- * @param {number} max_y    viewport maximum height (ground) excluding scrollbar
- */
-const shouldFall = (x, y, max_x=window?.innerWidth, max_y=window?.innerHeight) => {
-    // not on left or right wall
-    if ( (x > 0) && (x + WIDTH < max_x) ) {
-        // not on ground
-        return (y > 0) && (y + HEIGHT < max_y);
-    }
-    return false;
-}
-
-// check if dom element is visible in viewport
-const isElementVisible = (ele) => {
-    return !!( ele.offsetWidth || ele.offsetHeight || ele.getClientRects().length );
-}
-
-// function to get all visible elements' rect from the viewport
-const getVisibleElements = () => {
-    let visibleElements = Array.from( document.querySelectorAll('div') )
-        .filter(
-            div => window.getComputedStyle(div).getPropertyValue('display') !== 'none' && !Array.from(div.classList).some((c) => c.startsWith('shimeji'))
-        );
-    // sort results by ascending y coordinate followed by ascending x coordinate
-    visibleElements.sort((a, b) => {
-        let aRect = a.getBoundingClientRect();
-        let bRect = b.getBoundingClientRect();
-        return aRect.y - bRect.y || aRect.x - bRect.x;
-    });
-    return visibleElements;
-}
-
-/**
- * function to get nearest visible elements from the viewport
- * @param {number} x    center x coordinate of Shimeji
- * @param {number} y    center y coordinate of Shimeji
- * @param {number} radius distance from center of Shimeji to its closest side
- * @param {number} offset offset distance from perimeter of Shimeji
- * @returns {{left, right, bottom}} nearest visible div elements
- */
-const getNearestVisibleElements = (x, y, radius, offset=0) => {
-    // ignore top element
-    // const topElements = document.elementFromPoint(x, y - radius - offset);
-    const leftElement = document.elementFromPoint(x - radius - offset, y);
-    const rightElement = document.elementFromPoint(x + radius + offset, y);
-    const bottomElement = document.elementFromPoint(x, y + radius + offset);
-    return {
-        left: leftElement,
-        right: rightElement,
-        bottom: bottomElement
-    };
-}
-
-/**
- * check if two elements collided
- * @param {DOMRect} x    source HTMLElement Bounding Rect
- * @param {DOMRect} y    target HTMLElement Bounding Rect
- * @returns {boolean} nearest visible div elements
- */
-const isCollided = (source, target) => {
-    return !(
-        source.x > target.right ||
-        source.right < target.x ||
-        source.bottom < target.y ||
-        source.y > target.bottom
-    );
-}
-
-/**
- * function to determine if any ELEMENT should fall in y-axis regardless of x coordinate, will return false when element hits ground or rect of another div
- * @param {HTMLElement} ele
- * @param {[HTMLElement]} position
- * @returns {[boolean, HTMLElement]} [boolean true if should fall, visible element to collide or null if none]
- */
-const shouldFallY = (ele, visibleElements=[], max_y=window?.innerHeight) => {
-    // not on left or right wall
-    if (!ele instanceof HTMLElement)
-        return [false, null];
-
-    let eleRect = ele.getBoundingClientRect();
-    if ( eleRect.bottom < max_y) {
-        // not on ground
-        for(let i=0; i<visibleElements.length; ++i) {
-            let rect = visibleElements[i].getBoundingClientRect();
-            if (rect.y < eleRect.bottom || eleRect.right < rect.x || eleRect.x > rect.right)
-                continue;
-            return [eleRect.bottom < rect.y, visibleElements[i]];
-        }
-        return [true, null];
-    }
-    return [false, null];
-}
-
-/**
- * function to calculate the width of window's scrollbar
- * @returns {number} Window's scrollbar width in pixel
- */
-const getScrollbarWidth = () => {
-    // Add temporary box to wrapper
-    let scrollbox = document.createElement('div');
-
-    // Make box scrollable
-    scrollbox.style.overflow = 'scroll';
-
-    // Append box to document
-    document.body.appendChild(scrollbox);
-
-    // Measure inner width of box
-    let scrollBarWidth = scrollbox.offsetWidth - scrollbox.clientWidth;
-
-    // Remove box
-    document.body.removeChild(scrollbox);
-
-    return (document.body.scrollHeight > document.body.clientHeight)? scrollBarWidth : 0;
-}
-
-/**
  * Utility function to inject CSS to html document
  * @param {string} styleString
  */
@@ -279,7 +193,84 @@ function addStyle(styleString) {
     const style = document.createElement('style');
     style.textContent = styleString;
     document.head.append(style);
-};
+}
+
+addStyle(`
+div.shimeji-container {
+    position:fixed;
+    left:0;
+    top:0;
+    z-index:100;
+    cursor: move;
+    filter: drop-shadow(0 5mm 4mm rgba(0, 0, 0, 0.637));
+}
+
+div.shimeji-frame-container {
+    width: 100%;
+    height: 100%;
+    display: inline;
+    position: absolute;
+    left: 0;
+    top: 0;
+    /* transition-timing-function: ease-out; */
+    z-index: 90;
+}
+
+img.shimeji-frame {
+    width: 100%;
+    height: 100%;
+    display: inline;
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 90;
+}
+
+div.shimeji-menu {
+    width: 100px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background-color: rgba(173, 173, 173, 0.582);
+    border-radius: 3px;
+    padding: 3px;
+    z-index: 102;
+}
+
+button.shimeji-menu-btn {
+    width: 100%;
+    background-color: transparent;
+    border: none;
+    border-radius: 3px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    color: black;
+    margin: 1px 0;
+    z-index: 103;
+}
+
+button.shimeji-menu-btn:hover {
+    background-color: rgba(0,0,0,25%);
+    color: white;
+    font-weight: bold;
+}
+
+div.shimeji-food {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 16px;
+    height: 16px;
+    display: inline;
+    background-image: url('data:image/png;base64,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');
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    z-index: 101;
+}    
+`);
 
 // interface class for object with collision and bounding box
 class BoundedHTMLElement {
@@ -315,6 +306,16 @@ class BoundedHTMLElement {
     setY = (val) => {
         this.position.y = val;
         this.bottom = val + this.height;
+    }
+    /**
+     * @param {number} width
+     * @param {number} height
+     */
+    setSize = (width, height) => {
+        this.width = width;
+        this.height = height;
+        this.dom.style.width = `${width}px`;
+        this.dom.style.height = `${height}px`;
     }
     updateScrollbarWidth = () => {
         // Add temporary box to wrapper
@@ -391,26 +392,6 @@ class BoundedHTMLElement {
             return !this.onYBound();
         }
         return false;
-    }
-
-    /**
-     * function to determine if any ELEMENT should fall in y-axis regardless of x coordinate, will return false when element hits ground or rect of another div
-     * @returns {[boolean, HTMLElement]} [boolean true if should fall, visible element to collide or null if none]
-     */
-    shouldFallYCollide = (visibleElements=[]) => {
-        this.updateMaxHeight();
-        if ( !this.onYBound() ) {
-            // not on ground
-            for(let i=0; i<visibleElements.length; ++i) {
-                let rect = visibleElements[i].getBoundingClientRect();
-                if (rect.y < this.bottom || this.right < rect.x || this.position.x > rect.right)
-                    continue;
-                // return the first div element to be collided
-                return [this.bottom < rect.y, visibleElements[i]];
-            }
-            return [true, null];
-        }
-        return [false, null];
     }
 
     /**
@@ -774,7 +755,7 @@ class ShimejiFood extends BoundedHTMLElement {
 
         this.setPosition(position);
 
-        document.body.appendChild(this.dom);
+        document.documentElement.appendChild(this.dom);
 
         if (this.stayInWindow) {
             window.addEventListener('resize', this.handleWindowResize);
@@ -786,25 +767,66 @@ class ShimejiFood extends BoundedHTMLElement {
 };
 
 
+/**
+ * quadratic and kinematic equation to calculate parabolic trajectory
+ * @param {number} x    x coordinate
+ * @param {number} y    y coordinate
+ * @param {number} power    initial push force
+ * @param {number} angle    projection angle
+ * @param {number} positivity   1 = to right, -1 = to left
+ */
+const parabolicTrajectory = (x, y, power=25, angle=45, positivity=1) => {
+    angle = angle >= MIN_EXPLODE_ANGLE && angle <= MAX_EXPLODE_ANGLE? angle : (angle + MIN_EXPLODE_ANGLE) % MAX_EXPLODE_ANGLE;
+    power = power >= MIN_EXPLODE_POWER && power <= MAX_EXPLODE_POWER? power : (power + MIN_EXPLODE_POWER) % MAX_EXPLODE_POWER;
+    positivity = positivity === 1? 1 : -1;
+
+    let trajectories = [];
+    const rad = angle * Math.PI / 180.0; // theta
+    const GRAVITY = -9.81; // g acceleration
+    let initialVelocity = {x: positivity * Math.sin(rad) * power, y: Math.cos(rad) * power}; // x: |V| cos theta, y: |V| cos theta
+
+    const kinematicEquation = (acceleration, velocity, position, time) => {
+        return 0.5 * acceleration * time * time + velocity * time + position;
+    }
+
+    // console.log(x, ': ', y);
+    let newX = x * 1.0;
+    let newY = y * 1.0;
+
+    let time = 0.25;
+    do {
+        newX = Math.round((kinematicEquation(0, initialVelocity.x, x, time) + Number.EPSILON) * 10) / 10;
+        newY = y - ( (Math.round((kinematicEquation(GRAVITY, initialVelocity.y, y, time) + Number.EPSILON) * 10) / 10) - y );
+        time += 0.25;
+        trajectories.push({x: newX, y: newY});
+    } while (newY < y);
+    trajectories[trajectories.length-1].y = y;
+    // console.log(trajectories[trajectories.length-1]);
+    return trajectories;
+}
+
 // Shimeji main object
 class Shimeji extends BoundedHTMLElement {
     static count = 0;
     id = null;
     dom = null;
     position = {
-        x: (window?.innerWidth / 5) * 3,
-        y: 10,
+        x: 0,
+        y: 0,
     };
     width = WIDTH;
     height = HEIGHT;
     right = 1100 + WIDTH;
     bottom = 10 + HEIGHT;
+    radius = null;
     // track action type
     #action = ACTIONS.standing;
     // track action animation timeout
     #actionTimeout = null;
     // set if animation is paused (false) or played (true)
     #play = false;
+    // track if shimeji is being propelled
+    #isPropelled = false;
     // track if shimeji is being dragged
     #isDragged = false;
     // track shimeji move direction for walking or climbing actions, see config for list of available options
@@ -821,9 +843,15 @@ class Shimeji extends BoundedHTMLElement {
     isChasingFood = false;
     // id of closest food
     closestFoodId = null;
+    // targetted food reference
+    targetFood = null;
+    // is removed
+    #isRemoved = false;
 
     // shimeji actions
     actions = [];
+    // action begin time to determine if timeout and move on to next action
+    #actionBeginTime = Date.now();
     
     // right click menu state
     #menu = {
@@ -846,20 +874,19 @@ class Shimeji extends BoundedHTMLElement {
      * @param {number} val
      */
     setActionTimeout = (val) => {
-        if (val===null) {
-            this.#actionTimeout = null;
-            return;
-        }
-        this.#actionTimeout = setTimeout(() => {
-            //console.log(val);
-            this.nextAction();
-        }, val);
+        this.#actionTimeout = Date.now() + val;
     }
     /**
      * @param {boolean} val
      */
     setPlay = (val) => {
         this.#play = val;
+    }
+    /**
+     * @param {boolean} val
+     */
+    setIsPropelled = (val) => {
+        this.#isPropelled = val;
     }
     /**
      * @param {boolean} val
@@ -887,6 +914,12 @@ class Shimeji extends BoundedHTMLElement {
      */
     setSequence = (val) => {
         this.#sequence = val;
+    }
+    /**
+     * @param {ShimejiFood} food
+     */
+    setTargetFood = (food) => {
+        this.targetFood = food;
     }
 
     // handle right click to open menu
@@ -946,7 +979,112 @@ class Shimeji extends BoundedHTMLElement {
         document.removeEventListener('click', this.handleCloseMenu);
     };
 
-    eatDroppedFood = async (food) => {
+    /**
+     * **Propel Shimeji in given parabolic trajectory.**
+     * @param {[{x: number, y: number},...{}]} trajectory   parabolic trajectory consisting of list of 2D coordinates to propel Shimeji.
+     */
+    propel = async (trajectory) => {
+        if (trajectory.length === 1) return;
+        this.clearActionStates();
+        this.setIsPropelled(true);
+        this.setAction(ACTIONS.eating);
+
+        const direction = trajectory[1].x - trajectory[0].x > 0? 1 : -1;
+        this.setMoveDirection(direction);
+        this.alignShimeji();
+        let fps_interval_explosion = FPS_INTERVAL_FALLING;
+        
+        for (let i=0; i<trajectory.length; ++i) {
+            this.setPosition({
+                x: trajectory[i].x,
+                y: trajectory[i].y,
+            });
+            await sleep(fps_interval_explosion);
+            fps_interval_explosion += 1; // decrement animation speed
+        }
+        await this.land();
+        this.setIsPropelled(false);
+        this.setAction(ACTIONS.standing);
+
+        this.setPlay(true);
+        this.setSequence(this.#sequence + 1);
+        this.animateShimeji();
+        
+        return;
+    }
+
+    // grow in size when consumed food
+    grow = async () => {
+        const oldHeight = this.height;
+        this.setSize(this.width * GROW_FACTOR, this.height * GROW_FACTOR);
+        this.setPosition({
+            x: this.position.x,
+            y: this.position.y + (this.height - oldHeight)
+        });
+        if (this.height > HEIGHT * MAX_GROW_RATIO || this.width > WIDTH * MAX_GROW_RATIO)
+            await this.explode();
+
+        return;
+    }
+
+    // explode into mini Shimejis when reached maximum size
+    explode = async () => {
+        // define mini Shimeji size
+        const miniWidth = 30;
+        const miniHeight = 30;
+        const newX = this.position.x + (this.width / 2) - (miniWidth / 2);
+        this.updateMaxHeight();
+        const newY = this.maxHeight - miniHeight;
+        
+        // reduce current Shimeji size to by (GROW_FACTOR - 1)
+        this.setSize(miniWidth, miniHeight);
+        this.setPosition({
+            x: newX,
+            y: newY,
+        });
+        
+        // random mini Shimeji count to divide
+        const duplicateCount = Math.floor( Math.random() * (MAX_EXPLODE_COUNT - MIN_EXPLODE_COUNT + 1) ) + MIN_EXPLODE_COUNT;
+        
+        // calculate propel trajectories
+        let trajectories = Array(duplicateCount).fill(undefined);
+        for (let i=0; i<duplicateCount; ++i) {
+            const power = Math.floor( Math.random() * (MAX_EXPLODE_POWER - MIN_EXPLODE_POWER + 1) ) + MIN_EXPLODE_POWER;
+            const angle = Math.floor( Math.random() * (MAX_EXPLODE_ANGLE - MIN_EXPLODE_ANGLE + 1) ) + MIN_EXPLODE_ANGLE;
+            const direction = i < duplicateCount / 2 ? 1 : -1;
+            trajectories[i] = parabolicTrajectory(this.position.x, this.position.y, power, angle, direction);
+        }
+        
+        // duplicate multiple mini Shimejis
+        await Promise.all(
+            trajectories.map(async (trajectory) => {
+                let mini = new Shimeji({
+                    animate: this.animate,
+                    draggable: this.draggable,
+                    move: this.move,
+                    chaseFood: this.chaseFood,
+                    duplicable: this.duplicable,
+                    stayInWindow: this.stayInWindow,
+                    showMenu: this.showMenu,
+                    spawnFromSky: false, // not spawned from sky but exploded and divided from parent position
+                    width: miniWidth,
+                    height: miniHeight,
+                    x: newX,
+                    y: newY,
+                });
+        
+                // explode animation
+                mini.propel(trajectory);
+            })
+        );
+
+        // remove current exploded Shimeji
+        this.removeShimeji();
+    }
+
+    eatDroppedFood = (food) => {
+        // stop chasing food
+        this.isChasingFood = false;
         // start eating food animation
         this.setAction(ACTIONS.eatingDroppedFood);
         // align before animation
@@ -954,69 +1092,51 @@ class Shimeji extends BoundedHTMLElement {
         // stop movement
         this.setMoveDirection(null);
 
+        this.setActionTimeout(4 * TIME_SECOND_IN_MS);
+        this.#actionBeginTime = Date.now();
+
+        this.setPlay(true);
+
+        // if food is eaten by other Shimeji, perform hard reset on food variables
         if( !food.eat() ) {
             // clear food related variables
             this.closestFoodDistance = null;
             this.closestFoodId = null;
             this.isChasingFood = false;
+            this.targetFood = null;
             return;
         }
 
-        let startTime = Date.now();
-        let ctr = 0;
-        const maxCount = 4;
-        while (
-            !this.#isDragged &&
-            food !== null &&
-            this.isChasingFood &&
-            ctr < maxCount
-        ) {
-            if (this.#play && Date.now() - startTime >= FPS_INTERVAL_ACTION) {
-                startTime = Date.now();
-                this.actions[this.#action].nextFrame();
-                ++ctr;
-                continue;
-            }
-            await sleep(FPS_INTERVAL_FALLING);
-        }
-
-        // clear food related variables
-        this.closestFoodDistance = null;
-        this.closestFoodId = null;
-        this.isChasingFood = false;
         return;
     }
 
     // chase food
     toClosestFood = async (e) => {
+        if (this.#isDragged || this.#action === ACTIONS.falling || this.#action === ACTIONS.landing) return;
+        // setting food variables
         const food = e.detail;
-        let radius = Math.max(this.width / 2, this.height / 2);
-        let x = this.position.x + radius;
-        let y = this.position.y + radius;
+        let x = this.position.x + this.radius;
+        let y = this.position.y + this.radius;
         x = Math.abs(x - food.x);
         y = Math.abs(y - food.y);
         x = x * x;
         y = y * y;
         let dist = Math.sqrt(x + y);
-        if (this.closestFoodDistance !== null && this.closestFoodDistance < dist) {
+        if (this.closestFoodDistance !== null && this.closestFoodDistance <= dist) {
             return;
         }
         if (this.isChasingFood && this.closestFoodId === food.target.id) // avoid repetition of function invocation
             return;
-
-        // stop current animation
-        this.setPlay(false);
-        // clear previous timeout
-        if (this.#actionTimeout) {
-            clearTimeout(this.#actionTimeout);
-            this.setActionTimeout(null);
-        }
-
-
+        
+        // Setting up variables for chasing food
         this.closestFoodDistance = dist;
         this.isChasingFood = true;
         this.closestFoodId = food.target.id;
-        
+        this.setTargetFood(food.target);
+
+        // move left or right toward food
+        this.setMoveDirection( (food.x < this.position.x + this.radius)? MOVE_PIXEL_NEG : MOVE_PIXEL_POS );
+
         // take shortcut from sky and wall to ground
         if (this.onXBound()) {
             this.setPosition({
@@ -1033,64 +1153,48 @@ class Shimeji extends BoundedHTMLElement {
             this.fall();
         }
 
-        this.setAction(ACTIONS.walking);
-        // move left or right toward food
-        this.setMoveDirection( (food.x < this.position.x + radius)? MOVE_PIXEL_NEG : MOVE_PIXEL_POS );
-        this.alignShimeji();    // align before movement
-        // start animation for shimeji frame component
-        this.setPlay(true);
-        
-        // set new action sequence to terminate last animation
-        const currSequence = this.#sequence + 1;
-        this.setSequence(currSequence);
-        
-        //console.log(`shimeji-${this.id} chasing closest ${food.id} at dist = ${dist}`);
-        let startTime = Date.now();
-        let success = false;
-        while (
-            !this.#isDragged &&
-            document.getElementById(food.id) !== null &&
-            this.isChasingFood &&
-            this.closestFoodId === food.target.id &&
-            food.target.canEat()
-        ) {
-            if (this.#play && Date.now() - startTime >= FPS_INTERVAL_CHASING_FOOD) {
-                startTime = Date.now();
-                this.actions[this.#action].nextFrame();
-                this.closestFoodDistance = Math.abs(this.position.x + radius - food.x);
-                if ( this.closestFoodDistance < MOVE_PIXEL_POS) {
-                    success = true;
-                    break;
-                }
-                if ( this.position.x + this.#moveDirection <= 0 || this.right + this.#moveDirection >= this.updateMaxWidth() ) {
-                    success = true;
-                    this.setPosition({
-                        x: this.position.x + this.#moveDirection,
-                        y: this.position.y,
-                    });
-                    break;
-                }
-                this.moveShimeji();
-                this.alignShimeji();// align after movement
-                continue;
-            }
+        while (true) {
+            // do nothing
+            if (!this.shouldFall()) break;
             await sleep(FPS_INTERVAL_FALLING);
         }
         
-        if (this.closestFoodId === food.target.id && food.target.canEat() && !this.#isDragged && success) {
-            await this.eatDroppedFood(food.target);
-        }
-        if (!this.isChasingFood || !success) {
-            this.isChasingFood = false;
-            this.closestFoodDistance = null;
-            this.closestFoodId = null;
-            await this.nextAction();
-        }
+        // continue chasing food
+        this.setAction(ACTIONS.walking);
+
+        // set new action sequence to terminate last animation
+        // const currSequence = this.#sequence + 1;
+        // this.setSequence(currSequence);
+
+        this.#actionBeginTime = Date.now();
+
         return;
+    }
+
+    // clear all action related states
+    clearActionStates = () => {
+        // play
+        this.setPlay(false);
+        if (this.#actionTimeout) {
+            this.setActionTimeout(null);
+        }
+        // alignment
+        this.setRotation('none');
+
+        // food
+        this.closestFoodDistance = null;
+        this.closestFoodId = null;
+        this.isChasingFood = false;
+        this.targetFood = null;
+
+        // move direction
+        this.setMoveDirection(null);
     }
 
     // remove current Shimeji from document
     removeShimeji = () => {
+        console.log('removed ', this.id);
+        this.#isRemoved = true;
         window.removeEventListener('resize', this.handleWindowResize);
         window.removeEventListener('scroll', this.handleScrolling);
         this.dom.addEventListener('shimejiFoodDropped', this.toClosestFood);
@@ -1146,6 +1250,28 @@ class Shimeji extends BoundedHTMLElement {
                 this.setRotation('none');
                 return;
             }
+            case ACTIONS.standing:
+            case ACTIONS.sleeping:
+            case ACTIONS.dragging:
+            case ACTIONS.eating: {
+                // no other action is permitted when not on the ground except climbing & walking
+                this.setRotation('none');
+                return;
+            }
+            default: {
+                break;
+            }
+        }
+        // special case for falling, eatingDroppedFood
+        switch (this.#moveDirection) {
+            case MOVE_PIXEL_NEG: {
+                this.setRotation('none');
+                return;
+            }
+            case MOVE_PIXEL_POS: {
+                this.setRotation('scaleX(-1)');
+                return;
+            }
             default: {
                 // no other action is permitted when not on the ground except climbing & walking
                 this.setRotation('none');
@@ -1167,7 +1293,7 @@ class Shimeji extends BoundedHTMLElement {
             this.updateMaxWidth();
             newPosition += this.position.x;
             // if not hitting wall
-            if (newPosition > 0 && newPosition + WIDTH < this.maxWidth) {
+            if (newPosition > 0 && newPosition + this.width < this.maxWidth) {
                 //console.log('moving... ', this.position.x, ' -> ', newPosition);
                 this.setPosition({
                     x: newPosition,
@@ -1194,7 +1320,7 @@ class Shimeji extends BoundedHTMLElement {
             //console.log('climbing... ');
             newPosition += this.position.y;
             // if not hitting ground or sky
-            if (newPosition > 0 && newPosition + HEIGHT < this.maxHeight) {
+            if (newPosition > 0 && newPosition + this.height < this.maxHeight) {
                 //console.log('moving... ', this.position.x, ' -> ', newPosition);
                 this.setPosition({
                     x: this.position.x,
@@ -1219,10 +1345,10 @@ class Shimeji extends BoundedHTMLElement {
         }
     }
 
-    nextAction = async () => {
+    nextAction = (actionId = null) => {
         const newTimeout = generateTimeOutDuration();
         // clear previous timeout
-        clearTimeout(this.#actionTimeout);
+        //clearTimeout(this.#actionTimeout);
         
         // stop current animation
         this.setPlay(false);
@@ -1231,7 +1357,7 @@ class Shimeji extends BoundedHTMLElement {
         this.setActionTimeout(newTimeout);
         
         // set action animation
-        let currAction = generateActionID(this.#action);
+        let currAction = (actionId)? actionId : generateActionID(this.#action);
         this.updateMaxHeight();
         if (this.bottom < this.maxHeight) {
             if (this.onXBound()) {
@@ -1257,15 +1383,157 @@ class Shimeji extends BoundedHTMLElement {
         } else {
             this.setMoveDirection(null);
         }
-        let startTime = Date.now();
-        while (
-            !this.#isDragged &&
-            this.#sequence === currSequence &&
-            !this.isChasingFood
-        ) {
 
-            if (this.#play && Date.now() - startTime >= FPS_INTERVAL_ACTION) {
-                startTime = Date.now();
+        this.#actionBeginTime = Date.now();
+        return;
+    }
+
+    animateShimeji = async () => {
+        let currSequence = this.#sequence;
+        while (!this.#isRemoved) {
+            // Event based action
+            if (this.#isPropelled) {
+                continue;
+            }
+            if (this.#isDragged || this.#action === ACTIONS.dragging) {
+                await sleep(FPS_INTERVAL_FALLING);
+                continue;
+            }
+            if (this.#action === ACTIONS.falling) {
+                if (this.shouldFall() && !this.#isDragged) {
+                    await sleep(FPS_INTERVAL_FALLING);
+                    this.setPosition({
+                        x: this.position.x,
+                        y: this.position.y + GRAVITY_PIXEL,
+                    });
+                    this.alignShimeji();
+                    continue;
+                }
+
+                if ( !this.onXBound() || !this.onSkyBound() ) {
+                    await this.land();
+                }
+    
+                if ( this.onXBound() ) {
+                    this.setAction(ACTIONS.climbing);
+                }
+    
+                if ( this.onYBound() ) {
+                    this.setAction(ACTIONS.walking);
+                }
+    
+                this.alignShimeji();
+
+                
+                if (!this.#play)
+                    this.setPlay(true);
+                
+                // move on to next action
+                if (!this.isChasingFood) {
+                    this.nextAction();
+                    currSequence = this.#sequence;
+                    continue;
+                }
+
+                // set new action sequence to terminate last animation
+                currSequence = this.#sequence;
+            }
+            if (this.#action === ACTIONS.landing) {
+                await sleep(FPS_INTERVAL_FALLING);
+                continue;
+            }
+            if (this.isChasingFood) {
+                // if food is eaten by other Shimeji
+                if (
+                    this.targetFood === null ||
+                    document.getElementById(`shimeji-food-${this.targetFood.id}`) === null ||
+                    !this.targetFood.canEat()
+                ) {
+                    // stop chasing food
+                    this.isChasingFood = false;
+                    // clear food related variables
+                    this.closestFoodDistance = null;
+                    this.closestFoodId = null;
+                    this.targetFood = null;
+                    // start next non event based action
+                    this.nextAction(ACTIONS.standing);
+                    currSequence = this.#sequence;
+                    continue;
+                }
+
+                // change target food
+                if (this.closestFoodId !== this.targetFood.id)
+                    continue;
+
+                // chase food
+                if (this.#play && Date.now() - this.#actionBeginTime >= FPS_INTERVAL_CHASING_FOOD) {
+                    this.#actionBeginTime = Date.now();
+                    this.actions[this.#action].nextFrame();
+                    this.closestFoodDistance = Math.abs(this.position.x + this.radius - this.targetFood.position.x);
+
+                    // reached food
+                    if ( this.closestFoodDistance < MOVE_PIXEL_POS ) {
+                        this.eatDroppedFood(this.targetFood);
+                        continue;
+                    }
+
+                    // reached food alternative condition
+                    if ( this.position.x + this.#moveDirection <= 0 || this.right + this.#moveDirection >= this.updateMaxWidth() ) {
+                        this.setPosition({
+                            x: this.position.x + this.#moveDirection,
+                            y: this.position.y,
+                        });
+                        this.eatDroppedFood(this.targetFood);
+                        continue;
+                    }
+
+                    this.moveShimeji();
+                    this.alignShimeji();// align after movement
+                    await sleep(FPS_INTERVAL_FALLING);
+                    continue;
+                }
+
+            }
+            if (this.#action === ACTIONS.eatingDroppedFood) {
+                // if finished eating food
+                if (
+                    this.#isDragged ||
+                    this.targetFood === null ||
+                    this.#actionBeginTime > this.#actionTimeout
+                ) {
+                    // clear food related variables
+                    this.closestFoodDistance = null;
+                    this.closestFoodId = null;
+                    this.targetFood = null;
+                    this.grow();
+                    // start next non event based action
+                    this.nextAction(ACTIONS.standing);
+                    currSequence = this.#sequence;
+                    continue;
+                }
+
+                if (this.#play && Date.now() - this.#actionBeginTime >= FPS_INTERVAL_ACTION) {
+                    this.#actionBeginTime = Date.now();
+                    this.actions[this.#action].nextFrame();
+                    continue;
+                }
+
+                await sleep(FPS_INTERVAL_FALLING);
+            }
+
+            // Non-Event-based actions
+            // timeout for current action, move on to next action
+            if (
+                this.#sequence !== currSequence ||
+                this.#actionBeginTime > this.#actionTimeout
+            ) {
+                this.nextAction();
+                currSequence = this.#sequence;
+                continue;
+            }
+
+            if (this.#play && Date.now() - this.#actionBeginTime >= FPS_INTERVAL_ACTION) {
+                this.#actionBeginTime = Date.now();
                 this.alignShimeji();    // align before movement
                 if (this.animate)
                     this.actions[this.#action].nextFrame();
@@ -1287,34 +1555,9 @@ class Shimeji extends BoundedHTMLElement {
         await sleep(FPS_INTERVAL_FALLING * 5);
     }
 
-    fall = async () => {
+    fall = () => {
         this.setPlay(false);
         this.setAction(ACTIONS.falling);
-        while (this.shouldFall() && !this.#isDragged) {
-            await sleep(FPS_INTERVAL_FALLING);
-            this.setPosition({
-                x: this.position.x,
-                y: this.position.y + GRAVITY_PIXEL,
-            });
-        }
-        if (!this.shouldFall()) {
-            if ( !this.onXBound() || !this.onSkyBound() )
-                await this.land();
-
-            if ( this.onXBound() )
-                this.setAction(ACTIONS.climbing);
-
-            if ( this.onYBound() )
-                this.setAction(ACTIONS.walking);
-
-            this.alignShimeji();
-            
-            if (!this.#play)
-                this.setPlay(false);
-
-            if (!this.isChasingFood)
-                await this.nextAction();
-        }
     }
 
     // handle window resize
@@ -1368,12 +1611,7 @@ class Shimeji extends BoundedHTMLElement {
         }
         e.stopPropagation();
         if (this.#play && !this.#isDragged && e.button===0) {
-            this.setPlay(false);
-            if (this.#actionTimeout) {
-                clearTimeout(this.#actionTimeout);
-                this.setActionTimeout(null);
-            }
-            this.setRotation('none');
+            this.clearActionStates();
             this.setIsDragged(true);
             this.setAction(ACTIONS.dragging);
             
@@ -1392,6 +1630,9 @@ class Shimeji extends BoundedHTMLElement {
      * @param {boolean} options.duplicable is shimeji duplicable
      * @param {boolean} options.stayInWindow will shimeji stay in window when scrolled or resized
      * @param {boolean} options.showMenu enable or disable right click menu of shimeji
+     * @param {boolean} options.spawnFromSky enable or disable shimeji spawned from sky
+     * @param {boolean} options.width custom Shimeji width
+     * @param {boolean} options.height custom Shimeji height
      * @returns Shimeji instance
      */
     constructor(options={
@@ -1402,8 +1643,14 @@ class Shimeji extends BoundedHTMLElement {
         duplicable: true,
         stayInWindow: true,
         showMenu: true,
+        spawnFromSky: true,
+        width: WIDTH,
+        height: HEIGHT,
+        x: (window?.innerWidth / 5) * 3,
+        y: 10,
     }) {
         super();
+        // settings
         this.animate = options.animate;
         this.draggable = options.draggable;
         this.move = options.move;
@@ -1411,8 +1658,24 @@ class Shimeji extends BoundedHTMLElement {
         this.duplicable = options.duplicable;
         this.stayInWindow = options.stayInWindow;
         this.showMenu = options.showMenu;
+
+        // class attributes
+        this.width = options.width? options.width : WIDTH;
+        this.height = options.height? options.height : HEIGHT;
+        this.position.x = options.x? options.x : (window?.innerWidth / 5) * 3;
+        this.position.y = options.y? options.y : 10;
+
+        this.right = this.position.x + this.width;
+        this.bottom = this.position.y + this.height;
+        this.radius = Math.max(this.width / 2, this.height / 2);
+        
+        // begin animation
         this.spawnShimeji();
-        this.fall();
+        if (options.spawnFromSky) {
+            this.fall();
+            this.animateShimeji();
+        }
+
         return this;
     }
 
@@ -1423,8 +1686,8 @@ class Shimeji extends BoundedHTMLElement {
         const eleId = 'shimeji-' + this.id;
         this.dom.setAttribute('id', eleId);
         this.dom.classList.add('shimeji-container');
-        this.dom.style.width = `${WIDTH}px`;
-        this.dom.style.height = `${HEIGHT}px`;
+        this.dom.style.width = `${this.width}px`;
+        this.dom.style.height = `${this.height}px`;
         // this.dom.style.top = `${this.position.y}px`;
         // this.dom.style.left = `${this.position.x}px`;
         this.dom.style.transform = `translate(${this.position.x}px, ${this.position.y}px)`;
@@ -1440,7 +1703,7 @@ class Shimeji extends BoundedHTMLElement {
 
 
         // apply settings and append Shimeji to document
-        document.body.appendChild(this.dom);
+        document.documentElement.appendChild(this.dom);
 
         // drag event handler
         if (this.draggable) {
@@ -1461,6 +1724,7 @@ class Shimeji extends BoundedHTMLElement {
         }
     }
 };
+
 
 // Shimeji controller class to supply default setting options and control behavior of Shimeji and ShimejiFood
 class ShimejiController {
@@ -1523,11 +1787,30 @@ class ShimejiController {
      * @param {boolean} shimejiOptions.duplicable is shimeji duplicable
      * @param {boolean} shimejiOptions.stayInWindow will shimeji stay in window when scrolled or resized
      * @param {boolean} shimejiOptions.showMenu enable or disable right click menu of shimeji
+     * @param {boolean} shimejiOptions.spawnFromSky enable or disable shimeji spawned from sky
      * @param {*} foodOptions Shimeji food related options
      * @param {boolean} foodOptions.dropFood enable or disable food dropping
      * @param {boolean} foodOptions.stayInWindow will food stay in window when scrolled or resized
      * @param {boolean} options.autoSpawnShimeji enable or disable automated spawn of new Shimeji instance at an interval in second
      * @param {boolean} options.spawnInteral set the default interval in second to spawn new Shimeji instance automatically
+     * @param {*} customizeOptions Shimeji customization options
+     * @param {boolean} customizeOptions.WIDTH width of shimeji (alter this only when applying custom shimeji images)
+     * @param {boolean} customizeOptions.HEIGHT height of shimeji (alter this only when applying custom shimeji images)
+     * @param {boolean} customizeOptions.MIN_DURATION_MS minimum animation repeat duration
+     * @param {boolean} customizeOptions.MAX_DURATION_MS maximum animation repeat duration
+     * @param {boolean} customizeOptions.FRAME_RATE_FALLING Default frame rate of falling animation: must be lesser than 1000, 25 is recommended
+     * @param {boolean} customizeOptions.FPS_INTERVAL_CHASING_FOOD Default FPS Interval in ms for chasing food animation: 100 is recommended
+     * @param {boolean} customizeOptions.FRAME_RATE_ACTION Default frame rate of action animation: 1 is recommended
+     * @param {boolean} customizeOptions.GRAVITY_PIXEL Default gravity falling speed (px): 30 is recommended
+     * @param {boolean} customizeOptions.ACTIONS Default gravity falling speed (px): 30 is recommended
+     * @param {boolean} customizeOptions.MIN_ACTION_ID Default min of range for non-event-based action ID, event-based actions are only activated based on triggered event such as dragging the shimeji or letting shimeji fall from sky
+     * @param {boolean} customizeOptions.MAX_ACTION_ID Default max of range for non-event-based action ID
+     * @param {boolean} customizeOptions.MOVE_PIXEL_POS Default positive moving speed in pixel: 10 is recommended
+     * @param {boolean} customizeOptions.MOVE_PIXEL_NEG Default negative moving speed in pixel: -10 is recommended
+     * @param {boolean} customizeOptions.MAX_FOOD_COUNT Maximum number of Shimeji feed drop allowed at a same time
+     * @param {boolean} customizeOptions.GROW_FACTOR Default growing factor of Shimeji size after eating food
+     * @param {number} customizeOptions.MAX_GROW_RATIO Maximum grow ratio to initial width
+     * @param {*} customizeOptions.ACTIONS_SOURCES Sources of custom images (frames) for each Shimeji action
      */
     constructor (options={
         shimejiOptions: {
@@ -1538,16 +1821,84 @@ class ShimejiController {
             duplicable: true,
             stayInWindow: true,
             showMenu: true,
+            spawnFromSky: true,
+            width: WIDTH,
+            height: HEIGHT,
         },
         foodOptions: {
             dropFood: true,
             stayInWindow: true,
         },
         autoSpawnShimeji: false,
-        spawnInteral: 20,
+        spawnInterval: 20,
+        customizeOptions: {
+            WIDTH: WIDTH,
+            HEIGHT: HEIGHT,
+            // min and max animation repeat duration
+            MIN_DURATION_MS: MIN_DURATION_MS,
+            MAX_DURATION_MS: MAX_DURATION_MS,
+            // Default frame rate of falling animation
+            FRAME_RATE_FALLING: FRAME_RATE_FALLING,  // must be lesser than 1000, 25 is recommended
+            // Default FPS Interval in ms for chasing food animation
+            FPS_INTERVAL_CHASING_FOOD: FPS_INTERVAL_CHASING_FOOD, // 100 is recommended for running towards food
+            // Default frame rate of action animation
+            FRAME_RATE_ACTION: FRAME_RATE_ACTION,  // 1 is recommended
+            // Default gravity falling speed (px), 30 is recommended
+            GRAVITY_PIXEL: GRAVITY_PIXEL,
+            // available action animation of shimeji
+            ACTIONS: ACTIONS,
+            // Default range of non-event-based action
+            // event-based actions are only activated based on triggered event such as dragging the shimeji or letting shimeji fall from sky
+            MIN_ACTION_ID: MIN_ACTION_ID,
+            MAX_ACTION_ID: MAX_ACTION_ID,
+            // Default moving speed in pixel
+            MOVE_PIXEL_POS: MOVE_PIXEL_POS,   // 10 is recommended
+            MOVE_PIXEL_NEG: MOVE_PIXEL_NEG,   // 10 is recommended
+            // Maximum number of Shimeji feed drop allowed at a same time
+            MAX_FOOD_COUNT: MAX_FOOD_COUNT,
+            // Default growing factor of Shimeji size after eating food
+            GROW_FACTOR: GROW_FACTOR,
+            // maximum grow ratio to initial width
+            MAX_GROW_RATIO: MAX_GROW_RATIO,
+            // sources of images (frames) for each Shimeji action
+            ACTIONS_SOURCES: ACTIONS_SOURCES,
+        },
     }) {
-        this.shimejiOptions = options.shimejiOptions;
-        this.foodOptions = options.foodOptions;
+        if (options.customizeOptions) {
+            if (options.customizeOptions.WIDTH) WIDTH = options.customizeOptions.WIDTH;
+            if (options.customizeOptions.HEIGHT) HEIGHT = options.customizeOptions.HEIGHT;
+            if (options.customizeOptions.MIN_DURATION_MS) MIN_DURATION_MS = options.customizeOptions.MIN_DURATION_MS;
+            if (options.customizeOptions.MAX_DURATION_MS) MAX_DURATION_MS = options.customizeOptions.MAX_DURATION_MS;
+            if (options.customizeOptions.FRAME_RATE_FALLING) FRAME_RATE_FALLING = options.customizeOptions.FRAME_RATE_FALLING;
+            if (options.customizeOptions.FPS_INTERVAL_CHASING_FOOD) FPS_INTERVAL_CHASING_FOOD = options.customizeOptions.FPS_INTERVAL_CHASING_FOOD;
+            if (options.customizeOptions.FRAME_RATE_ACTION) FRAME_RATE_ACTION = options.customizeOptions.FRAME_RATE_ACTION;
+            if (options.customizeOptions.GRAVITY_PIXEL) GRAVITY_PIXEL = options.customizeOptions.GRAVITY_PIXEL;
+            if (options.customizeOptions.ACTIONS) ACTIONS = options.customizeOptions.ACTIONS;
+            if (options.customizeOptions.MIN_ACTION_ID) MIN_ACTION_ID = options.customizeOptions.MIN_ACTION_ID;
+            if (options.customizeOptions.MAX_ACTION_ID) MAX_ACTION_ID = options.customizeOptions.MAX_ACTION_ID;
+            if (options.customizeOptions.MOVE_PIXEL_POS) MOVE_PIXEL_POS = options.customizeOptions.MOVE_PIXEL_POS;
+            if (options.customizeOptions.MOVE_PIXEL_NEG) MOVE_PIXEL_NEG = options.customizeOptions.MOVE_PIXEL_NEG;
+            if (options.customizeOptions.MAX_FOOD_COUNT) MAX_FOOD_COUNT = options.customizeOptions.MAX_FOOD_COUNT;
+            if (options.customizeOptions.GROW_FACTOR) GROW_FACTOR = options.customizeOptions.GROW_FACTOR;
+            if (options.customizeOptions.ACTIONS_SOURCES) ACTIONS_SOURCES = options.customizeOptions.ACTIONS_SOURCES;
+        }
+        this.shimejiOptions = {
+            animate: options.shimejiOptions.animate? options.shimejiOptions.animate : true,
+            draggable: options.shimejiOptions.draggable? options.shimejiOptions.draggable : true,
+            move: options.shimejiOptions.move? options.shimejiOptions.move : true,
+            chaseFood: options.shimejiOptions.chaseFood? options.shimejiOptions.chaseFood : true,
+            duplicable: options.shimejiOptions.duplicable? options.shimejiOptions.duplicable : true,
+            stayInWindow: options.shimejiOptions.stayInWindow? options.shimejiOptions.stayInWindow : true,
+            showMenu: options.shimejiOptions.showMenu? options.shimejiOptions.showMenu : true,
+            spawnFromSky: options.shimejiOptions.spawnFromSky? options.shimejiOptions.spawnFromSky : true,
+            width: options.shimejiOptions.width? options.shimejiOptions.width : WIDTH,
+            height: options.shimejiOptions.height? options.shimejiOptions.height : HEIGHT,
+        };
+        this.foodOptions = {
+            dropFood: options.foodOptions.dropFood? options.foodOptions.dropFood: true,
+            stayInWindow: options.foodOptions.stayInWindow? options.foodOptions.stayInWindow: true,
+        };
+
         if (this.foodOptions.dropFood) {
             window.addEventListener('mousemove', this.recordMousePosition);
             window.addEventListener('keyup', this.dropFood);
@@ -1555,10 +1906,10 @@ class ShimejiController {
         }
         new Shimeji(this.shimejiOptions);
 
-        if (options.autoSpawnShimeji) {
+        if (options.autoSpawnShimeji && options.autoSpawnShimeji === true && options.spawnInterval) {
             this.#spawnInterval = setInterval(() => {
                 new Shimeji(this.shimejiOptions);
-            }, options.spawnInteral * TIME_SECOND_IN_MS);
+            }, options.spawnInterval * TIME_SECOND_IN_MS);
         }
         return this;
     }
@@ -1575,6 +1926,7 @@ class ShimejiController {
         document.querySelectorAll('.shimeji-container').forEach(e => e.remove());
     }
 };
+
 
 
 (function() {
@@ -1672,7 +2024,7 @@ class ShimejiController {
             stayInWindow: true,
         },
         autoSpawnShimeji: false,
-        spawnInteral: 120,
+        spawnInteral: 3,
     });
 
 })();
