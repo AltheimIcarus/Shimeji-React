@@ -1,13 +1,10 @@
 /**
- * v1.2.7-refactor
+ * v1.3.0-refactor
  * NEW FEATURES:
- * Implementing Shimeji becomes larger over time after eating dropped food, then explode into multiple mini Shimejis.
- * Added customization for Shimeji size and option to not spawn new Shimeji to drop from sky
- * Tested Shimeji.propel and parabolic trajectory functions.
+ * Implemented Shimeji becomes larger over time after eating dropped food, then explode into multiple mini Shimejis.
+ * Added customization for Shimeji maximum grow size
  * 
  * BUGS FIXED:
- * Reversed parabolic trajectory curve (u-shaped -> n-shaped).
- * Hard coded Shimeji.right and Shimeji.bottom calculation value.
  * 
  * ACTIVE BUGS:
  * rare case (unable to reproduce) where one or few Shimejis randomly stop chasing food in mid way while food still exists (stuck in chasing food loop with non-walking action).
@@ -23,6 +20,9 @@ var HEIGHT = 100;
 
 // default growing factor of Shimeji size after eating food
 var GROW_FACTOR = 1.1; // 110 %
+
+// maximum grow ratio to initial width
+var MAX_GROW_RATIO = 2;
 
 // min and max animation repeat duration
 var MIN_DURATION_MS = 10000;
@@ -75,7 +75,7 @@ var MAX_FOOD_COUNT = 5;
 // Maximum count of mini Shimejis to divide after explosion
 var MAX_EXPLODE_COUNT = 10;
 // Minimum count of mini Shimejis to divide after explosion
-var MIN_EXPLODE_COUNT = 3;
+var MIN_EXPLODE_COUNT = 5;
 // Maximum explosion force/power
 var MAX_EXPLODE_POWER = 90;
 // Minimum explosion force/power
@@ -291,6 +291,16 @@ class BoundedHTMLElement {
     setY = (val) => {
         this.position.y = val;
         this.bottom = val + this.height;
+    }
+    /**
+     * @param {number} width
+     * @param {number} height
+     */
+    setSize = (width, height) => {
+        this.width = width;
+        this.height = height;
+        this.dom.style.width = `${width}px`;
+        this.dom.style.height = `${height}px`;
     }
     updateScrollbarWidth = () => {
         // Add temporary box to wrapper
@@ -896,16 +906,6 @@ class Shimeji extends BoundedHTMLElement {
     setTargetFood = (food) => {
         this.targetFood = food;
     }
-    /**
-     * @param {number} width
-     * @param {number} height
-     */
-    setSize = (width, height) => {
-        this.width = width;
-        this.height = height;
-        this.dom.style.width = `${width}px`;
-        this.dom.style.height = `${height}px`;
-    }
 
     // handle right click to open menu
     handleRightClick = (e) => {
@@ -990,25 +990,43 @@ class Shimeji extends BoundedHTMLElement {
         await this.land();
         this.setIsPropelled(false);
         this.setAction(ACTIONS.standing);
+
+        this.setPlay(true);
         this.setSequence(this.#sequence + 1);
+        this.animateShimeji();
         
         return;
     }
 
     // grow in size when consumed food
-    grow = () => {
+    grow = async () => {
+        const oldHeight = this.height;
         this.setSize(this.width * GROW_FACTOR, this.height * GROW_FACTOR);
         this.setPosition({
             x: this.position.x,
-            y: this.position.y + (this.height * (1 - GROW_FACTOR))
+            y: this.position.y + (this.height - oldHeight)
         });
+        if (this.height > HEIGHT * MAX_GROW_RATIO || this.width > WIDTH * MAX_GROW_RATIO)
+            await this.explode();
+
+        return;
     }
 
     // explode into mini Shimejis when reached maximum size
-    explode = () => {
+    explode = async () => {
         // define mini Shimeji size
-        const miniWidth = WIDTH * (1 - GROW_FACTOR);
-        const miniHeight = HEIGHT * (1 - GROW_FACTOR);
+        const miniWidth = 30;
+        const miniHeight = 30;
+        const newX = this.position.x + (this.width / 2) - (miniWidth / 2);
+        this.updateMaxHeight();
+        const newY = this.maxHeight - miniHeight;
+        
+        // reduce current Shimeji size to by (GROW_FACTOR - 1)
+        this.setSize(miniWidth, miniHeight);
+        this.setPosition({
+            x: newX,
+            y: newY,
+        });
         
         // random mini Shimeji count to divide
         const duplicateCount = Math.floor( Math.random() * (MAX_EXPLODE_COUNT - MIN_EXPLODE_COUNT + 1) ) + MIN_EXPLODE_COUNT;
@@ -1018,31 +1036,35 @@ class Shimeji extends BoundedHTMLElement {
         for (let i=0; i<duplicateCount; ++i) {
             const power = Math.floor( Math.random() * (MAX_EXPLODE_POWER - MIN_EXPLODE_POWER + 1) ) + MIN_EXPLODE_POWER;
             const angle = Math.floor( Math.random() * (MAX_EXPLODE_ANGLE - MIN_EXPLODE_ANGLE + 1) ) + MIN_EXPLODE_ANGLE;
-            trajectories[i] = parabolicTrajectory(this.position.x, this.position.y, power, angle, i < duplicateCount / 2);
+            const direction = i < duplicateCount / 2 ? 1 : -1;
+            trajectories[i] = parabolicTrajectory(this.position.x, this.position.y, power, angle, direction);
         }
         
         // duplicate multiple mini Shimejis
-        for (let i=0; i<duplicateCount; ++i) {
-            let mini = new Shimeji({
-                animate: this.animate,
-                draggable: this.draggable,
-                move: this.move,
-                chaseFood: this.chaseFood,
-                duplicable: this.duplicable,
-                stayInWindow: this.stayInWindow,
-                showMenu: this.showMenu,
-                spawnFromSky: false, // not spawned from sky but exploded and divided from parent position
-                width: miniWidth,
-                height: miniHeight,
-            });
-
-            // explode animation
-            mini.propel(trajectories[i]);
-        }
+        await Promise.all(
+            trajectories.map(async (trajectory) => {
+                let mini = new Shimeji({
+                    animate: this.animate,
+                    draggable: this.draggable,
+                    move: this.move,
+                    chaseFood: this.chaseFood,
+                    duplicable: this.duplicable,
+                    stayInWindow: this.stayInWindow,
+                    showMenu: this.showMenu,
+                    spawnFromSky: false, // not spawned from sky but exploded and divided from parent position
+                    width: miniWidth,
+                    height: miniHeight,
+                    x: newX,
+                    y: newY,
+                });
         
+                // explode animation
+                mini.propel(trajectory);
+            })
+        );
 
-        // reduce current Shimeji size to by (1 - GROW_FACTOR)
-        this.setSize(width = miniWidth, height = miniHeight);
+        // remove current exploded Shimeji
+        this.removeShimeji();
     }
 
     eatDroppedFood = (food) => {
@@ -1156,6 +1178,7 @@ class Shimeji extends BoundedHTMLElement {
 
     // remove current Shimeji from document
     removeShimeji = () => {
+        console.log('removed ', this.id);
         this.#isRemoved = true;
         window.removeEventListener('resize', this.handleWindowResize);
         window.removeEventListener('scroll', this.handleScrolling);
@@ -1255,7 +1278,7 @@ class Shimeji extends BoundedHTMLElement {
             this.updateMaxWidth();
             newPosition += this.position.x;
             // if not hitting wall
-            if (newPosition > 0 && newPosition + WIDTH < this.maxWidth) {
+            if (newPosition > 0 && newPosition + this.width < this.maxWidth) {
                 //console.log('moving... ', this.position.x, ' -> ', newPosition);
                 this.setPosition({
                     x: newPosition,
@@ -1282,7 +1305,7 @@ class Shimeji extends BoundedHTMLElement {
             //console.log('climbing... ');
             newPosition += this.position.y;
             // if not hitting ground or sky
-            if (newPosition > 0 && newPosition + HEIGHT < this.maxHeight) {
+            if (newPosition > 0 && newPosition + this.height < this.maxHeight) {
                 //console.log('moving... ', this.position.x, ' -> ', newPosition);
                 this.setPosition({
                     x: this.position.x,
@@ -1636,8 +1659,6 @@ class Shimeji extends BoundedHTMLElement {
         if (options.spawnFromSky) {
             this.fall();
             this.animateShimeji();
-        } else {
-            setTimeout(() => this.animateShimeji(), generateTimeOutDuration());
         }
 
         return this;
@@ -1773,7 +1794,8 @@ class ShimejiController {
      * @param {boolean} customizeOptions.MOVE_PIXEL_NEG Default negative moving speed in pixel: -10 is recommended
      * @param {boolean} customizeOptions.MAX_FOOD_COUNT Maximum number of Shimeji feed drop allowed at a same time
      * @param {boolean} customizeOptions.GROW_FACTOR Default growing factor of Shimeji size after eating food
-     * @param {*} customizeOptions.ACTIONS_SOURCES sources of custom images (frames) for each Shimeji action
+     * @param {number} customizeOptions.MAX_GROW_RATIO Maximum grow ratio to initial width
+     * @param {*} customizeOptions.ACTIONS_SOURCES Sources of custom images (frames) for each Shimeji action
      */
     constructor (options={
         shimejiOptions: {
@@ -1821,6 +1843,8 @@ class ShimejiController {
             MAX_FOOD_COUNT: MAX_FOOD_COUNT,
             // Default growing factor of Shimeji size after eating food
             GROW_FACTOR: GROW_FACTOR,
+            // maximum grow ratio to initial width
+            MAX_GROW_RATIO: MAX_GROW_RATIO,
             // sources of images (frames) for each Shimeji action
             ACTIONS_SOURCES: ACTIONS_SOURCES,
         },
