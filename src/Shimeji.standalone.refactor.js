@@ -1,10 +1,13 @@
 /**
- * v1.3.0-refactor
+ * v1.3.1
  * NEW FEATURES:
  * Implemented Shimeji becomes larger over time after eating dropped food, then explode into multiple mini Shimejis.
  * Added customization for Shimeji maximum grow size
  * 
  * BUGS FIXED:
+ * Not so random x position when fall from sky after spawning new Shimeji
+ * Mini Shimeji explode and propel to ground but immediately teleport to initial y coordinate.
+ * Context menu too low to click after exploding into mini Shimeji
  * 
  * ACTIVE BUGS:
  * rare case (unable to reproduce) where one or few Shimejis randomly stop chasing food in mid way while food still exists (stuck in chasing food loop with non-walking action).
@@ -398,6 +401,7 @@ class ContextMenu {
     };
     removeFn = null;
     duplicateFn = null;
+    explodeFn = null;
     #parentId = null;
 
     handleRemove = (e) => {
@@ -419,11 +423,20 @@ class ContextMenu {
         this.duplicateFn();
     }
 
+    handleExplode = (e) => {
+        e.stopPropagation();
+        this.hideMenu();
+        this.explodeFn();
+    }
+
     /**
      * @param {{ position: { x: number; y: number; }; toggled: boolean; }} val
      */
     setMenu = (val) => {
-        this.dom.style.top =  `${0 + 2}px`;
+        let rect = this.dom.getBoundingClientRect();
+        if (rect.bottom > window?.innerHeight)
+            this.dom.style.top =  `${window?.innerHeight - rect.bottom - 2}px`;
+        else this.dom.style.top =  `${0 + 2}px`;
         this.dom.style.left = `${0 + 2}px`;
         this.#isToggled = val.toggled;
         this.toggle();
@@ -450,10 +463,11 @@ class ContextMenu {
         return this.#isToggled;
     }
 
-    constructor (parentId, remove, duplicate) {
+    constructor (parentId, remove, duplicate, explode) {
         this.#parentId = 'shimeji-' + parentId;
         this.removeFn = remove;
         this.duplicateFn = duplicate;
+        this.explodeFn = explode;
         this.dom = document.createElement('div');
         const eleId = 'shimeji-menu-' + parentId;
         this.dom.setAttribute('id', eleId);
@@ -473,9 +487,16 @@ class ContextMenu {
         this.duplicateBtn.classList.add('shimeji-menu-btn');
         this.duplicateBtn.innerHTML = '<span>Duplicate</span>';
         this.duplicateBtn.onclick = this.handleDuplicate;
+
+        this.explodeBtn = document.createElement('button');
+        this.explodeBtn.setAttribute('id', `shimeji-explode-btn-${parentId}`);
+        this.explodeBtn.classList.add('shimeji-menu-btn');
+        this.explodeBtn.innerHTML = '<span>KaBOOM!!!</span>';
+        this.explodeBtn.onclick = this.handleExplode;
         
         this.dom.appendChild(this.removeBtn);
         this.dom.appendChild(this.duplicateBtn);
+        this.dom.appendChild(this.explodeBtn);
         
         return this;
     }
@@ -784,9 +805,7 @@ const parabolicTrajectory = (x, y, power=25, angle=45, positivity=1) => {
         newY = y - ( (Math.round((kinematicEquation(GRAVITY, initialVelocity.y, y, time) + Number.EPSILON) * 10) / 10) - y );
         time += 0.25;
         trajectories.push({x: newX, y: newY});
-    } while (newY < y);
-    trajectories[trajectories.length-1].y = y;
-    // console.log(trajectories[trajectories.length-1]);
+    } while (newY < window?.innerHeight);
     return trajectories;
 }
 
@@ -1019,7 +1038,7 @@ class Shimeji extends BoundedHTMLElement {
         const miniHeight = 30;
         const newX = this.position.x + (this.width / 2) - (miniWidth / 2);
         this.updateMaxHeight();
-        const newY = this.maxHeight - miniHeight;
+        const newY = this.position.y - (this.height / 2) - (miniHeight / 2);
         
         // reduce current Shimeji size to by (GROW_FACTOR - 1)
         this.setSize(miniWidth, miniHeight);
@@ -1631,7 +1650,7 @@ class Shimeji extends BoundedHTMLElement {
         spawnFromSky: true,
         width: WIDTH,
         height: HEIGHT,
-        x: (window?.innerWidth / 5) * 3,
+        x: Math.floor( Math.random() * (window?.innerWidth - WIDTH + 1) ) + WIDTH,
         y: 10,
     }) {
         super();
@@ -1647,7 +1666,7 @@ class Shimeji extends BoundedHTMLElement {
         // class attributes
         this.width = options.width? options.width : WIDTH;
         this.height = options.height? options.height : HEIGHT;
-        this.position.x = options.x? options.x : (window?.innerWidth / 5) * 3;
+        this.position.x = options.x? options.x : Math.floor( Math.random() * (window?.innerWidth - this.width + 1) ) + this.width;
         this.position.y = options.y? options.y : 10;
 
         this.right = this.position.x + this.width;
@@ -1677,7 +1696,7 @@ class Shimeji extends BoundedHTMLElement {
         // this.dom.style.left = `${this.position.x}px`;
         this.dom.style.transform = `translate(${this.position.x}px, ${this.position.y}px)`;
 
-        this.contextMenu = new ContextMenu(this.id, this.removeShimeji, this.duplicateShimeji);
+        this.contextMenu = new ContextMenu(this.id, this.removeShimeji, this.duplicateShimeji, this.explode);
         this.dom.appendChild(this.contextMenu.dom);
 
         this.actions = Array(Object.keys(ACTIONS).length).fill(null);
