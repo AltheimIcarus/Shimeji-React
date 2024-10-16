@@ -1,13 +1,11 @@
 /**
- * v1.3.1
+ * v1.3.2
  * NEW FEATURES:
  * Implemented Shimeji becomes larger over time after eating dropped food, then explode into multiple mini Shimejis.
  * Added customization for Shimeji maximum grow size
  * 
  * BUGS FIXED:
- * Not so random x position when fall from sky after spawning new Shimeji
- * Mini Shimeji explode and propel to ground but immediately teleport to initial y coordinate.
- * Context menu too low to click after exploding into mini Shimeji
+ * Shimeji printed in <kbd>CTRL</kbd>+<kbd>P</kbd>
  * 
  * ACTIVE BUGS:
  * rare case (unable to reproduce) where one or few Shimejis randomly stop chasing food in mid way while food still exists (stuck in chasing food loop with non-walking action).
@@ -184,6 +182,14 @@ function addStyle(styleString) {
 }
 
 addStyle(`
+@media print
+{    
+    div.shimeji-container, div.shimeji-food, div.shimeji-menu
+    {
+        display: none !important;
+    }
+}
+
 div.shimeji-container {
     position:fixed;
     left:0;
