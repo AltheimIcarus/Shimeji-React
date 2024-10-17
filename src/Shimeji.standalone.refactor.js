@@ -1,13 +1,14 @@
 /**
- * v1.3.3
+ * v1.3.4
  * NEW FEATURES:
  * Added angrying (missed food), dissapointing (missed food), and pausing (when paused or right-clicked) animation.
  * 
  * BUGS FIXED:
  * Shimeji printed in <kbd>CTRL</kbd>+<kbd>P</kbd>
+ * Cases where one or few Shimejis randomly stop chasing food in mid way while food still exists (stuck in chasing food loop with non-walking action) due to multiple foods dropped to close or identical position. Shimeji keeps altenating between foods to chase (toClosestFood).
+ * Shimeji randomly timeout and change action from chasing food to other non-event based action while chasing food at far distance.
  * 
  * ACTIVE BUGS:
- * rare case (unable to reproduce) where one or few Shimejis randomly stop chasing food in mid way while food still exists (stuck in chasing food loop with non-walking action).
  * 
  */
 
@@ -276,6 +277,23 @@ div.shimeji-food {
     z-index: 101;
 }    
 `);
+
+/**
+ * Utility function to calculate distance rounded to zero decimal place
+ * @param {number} x0   x coordinate of origin point
+ * @param {number} x1   x coordinate of destination point
+ * @param {number} y0   y coordinate of origin point
+ * @param {number} y1   y coordinate of destination point
+ */
+const distanceRounded = (x0, x1, y0, y1) => {
+    let x = x0;
+    let y = y0;
+    x = Math.abs(x - x1);
+    y = Math.abs(y - y1);
+    x = x * x;
+    y = y * y;
+    return Math.floor( Math.sqrt(x + y) );
+};
 
 // interface class for object with collision and bounding box
 class BoundedHTMLElement {
@@ -1139,21 +1157,31 @@ class Shimeji extends BoundedHTMLElement {
         if (this.#isDragged || this.#action === ACTIONS.falling || this.#action === ACTIONS.landing) return;
         // setting food variables
         const food = e.detail;
-        let x = this.position.x + this.radius;
-        let y = this.position.y + this.radius;
-        x = Math.abs(x - food.x);
-        y = Math.abs(y - food.y);
-        x = x * x;
-        y = y * y;
-        let dist = Math.sqrt(x + y);
-        if (this.closestFoodDistance !== null && this.closestFoodDistance <= dist) {
-            return;
-        }
+        const x = this.position.x + this.radius;
+        const y = this.position.y + this.radius;
+        let distNew = distanceRounded(x, food.x, y, food.y);
+        
         if (this.isChasingFood && this.closestFoodId === food.target.id) // avoid repetition of function invocation
             return;
+
+        // compare two foods for current shortest distance to avoid rapid and repeated changing food
+        if (this.targetFood && this.closestFoodId !== food.target.id) {
+            const foodOriRadius = Math.max(this.targetFood.width / 2, this.targetFood.height / 2);
+            const foodOriX = this.targetFood.position.x + foodOriRadius;
+            const foodOriY = this.targetFood.position.y + foodOriRadius;
+            let distOri = distanceRounded(x, foodOriX, y, foodOriY);
+            if (distOri <= distNew) return;
+        }
+        // additional firewall to block changes
+        if (this.closestFoodDistance !== null && this.closestFoodDistance <= distNew) {
+            return;
+        }
         
+        // clear action states
+        // this.clearActionStates();
+
         // Setting up variables for chasing food
-        this.closestFoodDistance = dist;
+        this.closestFoodDistance = distNew;
         this.isChasingFood = true;
         this.closestFoodId = food.target.id;
         this.setTargetFood(food.target);
@@ -1162,7 +1190,7 @@ class Shimeji extends BoundedHTMLElement {
         this.setMoveDirection( (food.x < this.position.x + this.radius)? MOVE_PIXEL_NEG : MOVE_PIXEL_POS );
 
         // take shortcut from sky and wall to ground
-        if (this.onXBound()) {
+        if (this.onXBound() && !this.onGroundBound()) {
             this.setPosition({
                 x: (this.position.x === 0)? MOVE_PIXEL_POS : this.position.x - MOVE_PIXEL_POS,
                 y: this.position.y,
@@ -1491,35 +1519,43 @@ class Shimeji extends BoundedHTMLElement {
                 // change target food
                 if (this.closestFoodId !== this.targetFood.id)
                     continue;
-
+                
                 // chase food
-                if (this.#play && Date.now() - this.#actionBeginTime >= FPS_INTERVAL_CHASING_FOOD && this.#action === ACTIONS.walking) {
-                    this.#actionBeginTime = Date.now();
-                    this.actions[this.#action].nextFrame();
-                    this.closestFoodDistance = Math.abs(this.position.x + this.radius - this.targetFood.position.x);
+                if (this.#play && Date.now() - this.#actionBeginTime < FPS_INTERVAL_CHASING_FOOD && this.#action === ACTIONS.walking) {
+                    await sleep(FPS_INTERVAL_FALLING); // debounce
+                    continue
+                }
 
-                    // reached food
-                    if ( this.closestFoodDistance < MOVE_PIXEL_POS ) {
-                        this.eatDroppedFood(this.targetFood);
-                        continue;
-                    }
+                this.#actionBeginTime = Date.now();
+                this.actions[this.#action].nextFrame();
+                this.closestFoodDistance = Math.floor( Math.abs(this.position.x + this.radius - this.targetFood.position.x) );
 
-                    // reached food alternative condition
-                    if ( this.position.x + this.#moveDirection <= 0 || this.right + this.#moveDirection >= this.updateMaxWidth() ) {
-                        this.setPosition({
-                            x: this.position.x + this.#moveDirection,
-                            y: this.position.y,
-                        });
-                        this.eatDroppedFood(this.targetFood);
-                        continue;
-                    }
-
-                    this.moveShimeji();
-                    this.alignShimeji();// align after movement
-                    await sleep(FPS_INTERVAL_FALLING);
+                // reached food
+                if ( this.closestFoodDistance < MOVE_PIXEL_POS ) {
+                    this.eatDroppedFood(this.targetFood);
                     continue;
                 }
 
+                // reached food alternative condition
+                if ( this.position.x + this.#moveDirection <= 0 || this.right + this.#moveDirection >= this.updateMaxWidth() ) {
+                    this.setPosition({
+                        x: this.position.x + this.#moveDirection,
+                        y: this.position.y,
+                    });
+                    this.eatDroppedFood(this.targetFood);
+                    continue;
+                }
+
+                this.moveShimeji();
+                this.alignShimeji();// align after movement
+                await sleep(FPS_INTERVAL_FALLING);
+                if (this.#action !== ACTIONS.walking || !this.#play || !this.#moveDirection) {
+                    this.setPlay(true);
+                    this.setAction(ACTIONS.walking);
+                    this.setMoveDirection( (this.targetFood?.position.x < this.position.x + this.radius)? MOVE_PIXEL_NEG : MOVE_PIXEL_POS );
+                    continue;
+                }
+                continue;
             }
             if (this.#action === ACTIONS.eatingDroppedFood) {
                 // if finished eating food
