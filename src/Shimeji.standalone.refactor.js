@@ -1,13 +1,11 @@
 /**
- * v1.3.4
+ * v1.3.5
  * NEW FEATURES:
- * Added angrying (missed food), dissapointing (missed food), and pausing (when paused or right-clicked) animation.
  * 
  * BUGS FIXED:
- * Shimeji printed in <kbd>CTRL</kbd>+<kbd>P</kbd>
- * Cases where one or few Shimejis randomly stop chasing food in mid way while food still exists (stuck in chasing food loop with non-walking action) due to multiple foods dropped to close or identical position. Shimeji keeps altenating between foods to chase (toClosestFood).
- * Shimeji randomly timeout and change action from chasing food to other non-event based action while chasing food at far distance.
- * 
+ * Shimeji propel speed decreases over time after explode.
+ * Incorrect alignment or rotation of Shimeji on wall and sky when right-clicked to pause action.
+ 
  * ACTIVE BUGS:
  * 
  */
@@ -967,6 +965,7 @@ class Shimeji extends BoundedHTMLElement {
     handleRightClick = (e) => {
         e.preventDefault();
         this.setPlay(false);
+        this.alignShimeji();
         // console.log(document.documentElement.clientWidth, document.documentElement.clientHeight);
         // console.log(e.clientX, e.clientY);
 
@@ -1013,7 +1012,8 @@ class Shimeji extends BoundedHTMLElement {
             });
 
             this.setPlay(true);
-            this.setAction(ACTIONS.standing);
+            this.fall();
+            this.alignShimeji();
             if (!this.contextMenu.dom.contains(e.target)) {
                 // close right click menu
             }
@@ -1042,7 +1042,7 @@ class Shimeji extends BoundedHTMLElement {
                 y: trajectory[i].y,
             });
             await sleep(fps_interval_explosion);
-            fps_interval_explosion += 1; // decrement animation speed
+            fps_interval_explosion -= 0.01; // decrement animation speed
         }
         await this.land();
         this.setIsPropelled(false);
@@ -1298,6 +1298,22 @@ class Shimeji extends BoundedHTMLElement {
                 if (this.position.x === 0 && this.#moveDirection > 0) {
                     this.setRotation('scaleY(-1)');
                     return;
+                }
+                this.setRotation('none');
+                return;
+            }
+            case ACTIONS.pausing: {
+                if (this.onSkyBound()) {
+                    this.setRotation('scaleY(-1)');
+                        return;
+                }
+                if (this.position.x === 0 && !this.onGroundBound()) {
+                    this.setRotation('rotate(90deg)');
+                        return;
+                }
+                if (this.right >= this.updateMaxWidth() && !this.onGroundBound()) {
+                    this.setRotation('rotate(-90deg)');
+                        return;
                 }
                 this.setRotation('none');
                 return;
