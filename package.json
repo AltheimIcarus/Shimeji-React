@@ -1,6 +1,6 @@
 {
   "name": "shimeji-app",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A digital pet that roams freely in a webpage similar to that of Shimeji coded in Java, but this time in React.js.",
   "main": "index.js",
   "module": "dist/index.es.js",

@@ -1,5 +1,5 @@
-import { React } from 'react';
-import './ContextMenu.css';
+import { React } from "react";
+import "./ContextMenu.css";
 
 // button of right click menu option
 
@@ -9,46 +9,54 @@ const ContextMenu = ({
     positionY,
     positionX,
     remove,
-    // duplicate,
+    duplicate,
+    explode,
 }) => {
-
     const handleRemove = (e) => {
         e.stopPropagation();
         remove();
-    }
+    };
 
-    // const handleDuplicate = (e) => {
-    //     e.stopPropagation();
-    //     duplicate();
-    // }
+    const handleDuplicate = (e) => {
+        e.stopPropagation();
+        duplicate();
+    };
+
+    const handleExplode = (e) => {
+        e.stopPropagation();
+        explode();
+    };
 
     return (
         <div
             style={{
-                top: positionY + 2 + 'px',
-                left: positionX + 2 + 'px'
+                top: positionY + 2 + "px",
+                left: positionX + 2 + "px",
             }}
-            className={`shimeji-menu ${isToggled? 'active' : 'inactive'}`}
+            className={`shimeji-menu ${isToggled ? "active" : "inactive"}`}
             ref={contextMenuRef}
         >
-            <button
-                onClick={handleRemove}
-                key={0}
-                className='shimeji-menu-btn'
-            >
+            <button onClick={handleRemove} key={0} className="shimeji-menu-btn">
                 <span>Remove</span>
             </button>
 
-            {/* <button
+            <button
                 onClick={handleDuplicate}
                 key={1}
-                className='shimeji-menu-btn'
+                className="shimeji-menu-btn"
             >
                 <span>Duplicate</span>
-            </button> */}
+            </button>
+
+            <button
+                onClick={handleExplode}
+                key={2}
+                className="shimeji-menu-btn"
+            >
+                <span>KaBOOM!!!</span>
+            </button>
         </div>
     );
-
-}
+};
 
 export default ContextMenu;

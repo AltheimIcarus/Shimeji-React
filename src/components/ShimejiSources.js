@@ -47,9 +47,15 @@ export const ACTIONS_SOURCES = {
     'landing'  : [
         '/images/shime19.png',
     ],
+    'eatingDroppedFood': [
+        '/images/shime38.png',
+        '/images/shime39.png',
+        '/images/shime40.png',
+        '/images/shime41.png',
+    ],
 };
 
-
+export const FOOD_SOURCE = '/images/icon.png';
 // import standing1 from '/images/shime42.png';
 // import standing2 from '/images/shime43.png';
 // import standing3 from '/images/shime44.png';
