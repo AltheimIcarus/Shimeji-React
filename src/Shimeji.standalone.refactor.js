@@ -1,9 +1,10 @@
 /**
- * v1.3.6
+ * v1.3.7
  * NEW FEATURES:
  * Add purr sound when hover over Shimeji
  *
  * BUGS FIXED:
+ * Shimeji sound not loaded without user interaction.
  *
  * ACTIVE BUGS:
  *
@@ -1836,7 +1837,19 @@ class Shimeji extends BoundedHTMLElement {
 
     speak = (e) => {
         this.sound.currentTime = 0;
-        this.sound.play();
+        let promise = this.sound.play();
+        let playedOnLoad;
+        if (promise !== undefined) {
+            promise
+                .then((_) => {
+                    // Autoplay started!
+                    playedOnLoad = true;
+                })
+                .catch((error) => {
+                    // Autoplay was prevented.
+                    playedOnLoad = true;
+                });
+        }
     };
 
     /**
