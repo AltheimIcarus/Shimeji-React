@@ -5,6 +5,9 @@ body {
 .shimeji-container {
     /* background-image: url(../public/images/shime1.png); */
     position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 100;
 }
 
 .flip-horizontal {

@@ -158,7 +158,7 @@ function App() {
     }, []);
 
     const recordMousePosition = utility.debounce((e) => {
-        console.log(e.clientX, e.clientY, mousePositionRef.current.x);
+        // console.log(e.clientX, e.clientY, mousePositionRef.current.x);
         if (isKeyPressed) {
             mousePositionRef.current.x = e.clientX;
             mousePositionRef.current.y = e.clientY;

@@ -245,7 +245,7 @@ const Shimeji = React.memo(({
         let newPosition = moveDirectionRef.current;
 
         if(actionRef.current === constants.ACTIONS.walking) {
-            newPosition += positionRef.current.x;
+            newPosition = utility.bound(positionRef.current.x, widthRef.current, newPosition, maxWidth);
             // if not hitting wall
             if (!utility.onBound(newPosition, widthRef.current, maxWidth)) {
                 //console.log('moving... ', positionRef.current.x, ' -> ', newPosition);
@@ -260,7 +260,6 @@ const Shimeji = React.memo(({
             //console.log('hit wall... ', newPosition);
             
             // if 0 = hit left wall else right wall
-            newPosition = utility.bound(newPosition, widthRef.current, 0, maxWidth);
             setPosition({
                 ...position,
                 x: newPosition,
@@ -276,7 +275,7 @@ const Shimeji = React.memo(({
             return;
         } else if (actionRef.current === constants.ACTIONS.climbing) {
             //console.log('climbing... ');
-            newPosition += positionRef.current.y;
+            newPosition = utility.bound(positionRef.current.y, heightRef.current, newPosition, maxHeight);
             // if not hitting ground or sky
             if (!utility.onBound(newPosition, heightRef.current, maxHeight)) {
                 //console.log('moving... ', positionRef.current.x, ' -> ', newPosition);
@@ -290,7 +289,6 @@ const Shimeji = React.memo(({
             }
             
             // if 0 = hit sky else ground
-            newPosition = utility.bound(newPosition, heightRef.current, 0, maxHeight);
             //console.log('hit sky/gnd... ', newPosition);
             setPosition({
                 ...position,
@@ -324,12 +322,11 @@ const Shimeji = React.memo(({
 
         let x = positionRef.current.x;
         let y = positionRef.current.y;
-        if (utility.onGroundBound(y + heightRef.current, maxHeight)) {
-            if (utility.onBound(x, widthRef.current, maxWidth)) {
-                currAction = constants.ACTIONS.climbing;
-            } else {
-                currAction = constants.ACTIONS.walking;
-            }
+        if (utility.onSkyBound(y)) {
+            currAction = constants.ACTIONS.walking;
+        }
+        if (utility.onBound(x, widthRef.current, maxWidth) && utility.onSkyBound(y) && utility.onGroundBound(y+heightRef.current, maxHeight)) {
+            currAction = constants.ACTIONS.climbing;
         }
         if (actionRef.current !== currAction) {
             setAction(currAction);
@@ -471,6 +468,7 @@ const Shimeji = React.memo(({
         while (!isRemovedRef.current) {
             // Event based action
             if (isPropelledRef.current) {
+                await utility.sleep(constants.FPS_INTERVAL_FALLING);
                 continue;
             }
             if (isDraggedRef.current || actionRef.current === constants.ACTIONS.dragging) {
@@ -504,7 +502,8 @@ const Shimeji = React.memo(({
                     setAction(constants.ACTIONS.walking);
                 }
     
-                alignShimeji();
+                await alignShimeji();
+                await utility.sleep(100);
 
                 
                 if (!playRef.current)
@@ -606,13 +605,14 @@ const Shimeji = React.memo(({
             // timeout for current action, move on to next action
             if ( (sequenceRef.current !== currSequence) || (actionBeginTimeRef.current > actionTimeoutRef.current) ) {
                 await nextAction();
+                console.log("!");
                 currSequence = sequenceRef.current;
                 continue;
             }
 
             if (playRef.current && Date.now() - actionBeginTimeRef.current >= constants.FPS_INTERVAL_ACTION) {
                 actionBeginTimeRef.current = Date.now();
-                alignShimeji();    // align before movement
+                await alignShimeji();    // align before movement
                 nextFrame();
                 
                 if (moveDirectionRef.current !== null) {
@@ -722,15 +722,15 @@ const Shimeji = React.memo(({
     const handleDragEnd = async (e, data) => {
         setPosition({
             ...positionRef.current,
-            x: data.x,
-            y: data.y,
+            x: utility.bound(data.x, widthRef.current, 0, maxWidth),
+            y: utility.bound(data.y-50, heightRef.current, 0, maxHeight),
         });
         setIsDragged(false);
         fall();
     };
 
     // align Shimeji to appropriate rotation to face the direction it is currently moving to
-    const alignShimeji = () => {
+    const alignShimeji = async () => {
         switch (actionRef.current) {
             case constants.ACTIONS.walking: {
                 if (positionRef.current.y === 0) {
@@ -824,11 +824,8 @@ const Shimeji = React.memo(({
                 style={{
                     width: width,
                     height: height,
-                    left: 0,
-                    top: 0,
                     visibility: showShimeji? 'visible':'hidden',
-                    opacity: showShimeji? '1':'0',
-                    zIndex: 100
+                    opacity: showShimeji? '1':'0'
                 }}
                 onContextMenu={(e) => handleRightClick(e)}    // invoke right click context menu
             >
